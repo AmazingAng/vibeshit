@@ -9,15 +9,18 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, isAuthenticated, rank }: ProductCardProps) {
+  const parsedTags: string[] = product.tags ? JSON.parse(product.tags) : [];
+  const hasMeta = product.agent || product.llm || parsedTags.length > 0;
+
   return (
-    <div className="group flex items-center gap-3 py-4 sm:gap-4">
-      <span className="hidden w-6 text-right font-mono text-sm text-muted-foreground sm:block">
+    <div className="group flex items-start gap-3 py-4 sm:gap-4">
+      <span className="hidden w-6 pt-1 text-right font-mono text-sm text-muted-foreground sm:block">
         {rank}
       </span>
 
       <Link
         href={`/product/${product.slug}`}
-        className="flex flex-1 items-center gap-3 min-w-0"
+        className="flex flex-1 items-start gap-3 min-w-0"
       >
         {product.logoUrl ? (
           <img
@@ -38,15 +41,39 @@ export function ProductCard({ product, isAuthenticated, rank }: ProductCardProps
           <p className="truncate text-xs text-muted-foreground sm:text-sm">
             {product.tagline}
           </p>
+          {hasMeta && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {product.agent && (
+                <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  {product.agent}
+                </span>
+              )}
+              {product.llm && (
+                <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  {product.llm}
+                </span>
+              )}
+              {parsedTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </Link>
 
-      <ShitButton
-        productId={product.id}
-        initialCount={product.shitCount}
-        initialVoted={product.hasVoted}
-        isAuthenticated={isAuthenticated}
-      />
+      <div className="pt-1">
+        <ShitButton
+          productId={product.id}
+          initialCount={product.shitCount}
+          initialVoted={product.hasVoted}
+          isAuthenticated={isAuthenticated}
+        />
+      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ImageUpload } from "@/components/image-upload";
 
 export function SubmitForm() {
   const [state, formAction, isPending] = useActionState(
@@ -76,16 +77,59 @@ export function SubmitForm() {
         />
       </div>
 
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-[auto_1fr]">
+        <ImageUpload
+          name="logoUrl"
+          type="logo"
+          label="Logo"
+          hint="Square, max 2MB"
+        />
+        <ImageUpload
+          name="bannerUrl"
+          type="banner"
+          label="Banner"
+          hint="1200×630px recommended, max 5MB. Shows as preview on X/Twitter."
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="agent" className="font-mono text-xs">
+            Agent
+          </Label>
+          <Input
+            id="agent"
+            name="agent"
+            placeholder="e.g. Cursor, Claude Code, Lovable"
+            maxLength={100}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="llm" className="font-mono text-xs">
+            LLM
+          </Label>
+          <Input
+            id="llm"
+            name="llm"
+            placeholder="e.g. Claude Sonnet 4.5, GPT 5.2"
+            maxLength={100}
+          />
+        </div>
+      </div>
+
       <div className="space-y-2">
-        <Label htmlFor="logoUrl" className="font-mono text-xs">
-          Logo URL
+        <Label htmlFor="tags" className="font-mono text-xs">
+          Tags
         </Label>
         <Input
-          id="logoUrl"
-          name="logoUrl"
-          type="url"
-          placeholder="https://example.com/logo.png"
+          id="tags"
+          name="tags"
+          placeholder="e.g. ai, saas, developer-tools, web3"
+          maxLength={500}
         />
+        <p className="text-xs text-muted-foreground">
+          Comma-separated tags to categorize your project.
+        </p>
       </div>
 
       <div className="space-y-2">

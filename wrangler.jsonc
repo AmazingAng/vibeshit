@@ -43,6 +43,12 @@
 			"database_id": "53927da4-43b5-4928-849f-c2a5200a84e8"
 		}
 	],
+	"r2_buckets": [
+		{
+			"binding": "UPLOADS",
+			"bucket_name": "vibeshit-uploads"
+		}
+	],
 	"routes": [
 		{ "pattern": "vibeshit.org", "custom_domain": true },
 		{ "pattern": "www.vibeshit.org", "custom_domain": true }

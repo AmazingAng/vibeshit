@@ -24,11 +24,13 @@ export const metadata: Metadata = {
     description: "Product Hunt for Vibe Coding. Give projects a 💩.",
     type: "website",
     url: "https://vibeshit.org",
+    images: [{ url: "https://vibeshit.org/logo-1024.png", width: 1024, height: 1024 }],
   },
   twitter: {
     card: "summary",
     title: "Vibe Shit",
     description: "Product Hunt for Vibe Coding. Give projects a 💩.",
+    images: ["https://vibeshit.org/logo-1024.png"],
   },
 };
 
@@ -40,17 +42,19 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/logo-256.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo-256.png" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
         <ThemeProvider>
           <Nav />
-          <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+          <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
           <footer className="border-t border-border py-8 text-center text-sm text-muted-foreground">
-            <p className="font-mono">
-              💩 vibe shit &middot; for vibe coders
+            <p className="inline-flex items-center gap-1.5 font-mono">
+              <img src="/logo-256.png" alt="" className="inline h-4 w-4" />
+              vibe shit &middot; for vibe coders
             </p>
           </footer>
           <Toaster />

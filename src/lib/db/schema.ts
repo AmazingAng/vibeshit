@@ -59,7 +59,11 @@ export const products = sqliteTable("products", {
   description: text("description"),
   url: text("url").notNull(),
   logoUrl: text("logoUrl"),
+  bannerUrl: text("bannerUrl"),
   githubUrl: text("githubUrl"),
+  agent: text("agent"),
+  llm: text("llm"),
+  tags: text("tags"),
   userId: text("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),

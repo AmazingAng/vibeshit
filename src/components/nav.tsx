@@ -10,10 +10,10 @@ export async function Nav() {
 
   return (
     <header className="border-b border-border">
-      <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+      <nav className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-2 font-mono text-lg font-bold tracking-tight">
-            <span className="text-2xl">💩</span>
+            <img src="/logo-256.png" alt="Vibe Shit" className="h-8 w-8" />
             <span className="hidden sm:inline">VIBE SHIT</span>
           </Link>
           <Link

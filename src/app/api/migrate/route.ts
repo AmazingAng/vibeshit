@@ -19,6 +19,10 @@ const ALTER_STATEMENTS = [
   { check: "role", sql: "ALTER TABLE `users` ADD COLUMN `role` text NOT NULL DEFAULT 'user'" },
   { check: "status", sql: "ALTER TABLE `products` ADD COLUMN `status` text NOT NULL DEFAULT 'approved'" },
   { check: "username", sql: "ALTER TABLE `users` ADD COLUMN `username` text" },
+  { check: "bannerUrl", sql: "ALTER TABLE `products` ADD COLUMN `bannerUrl` text" },
+  { check: "agent", sql: "ALTER TABLE `products` ADD COLUMN `agent` text" },
+  { check: "llm", sql: "ALTER TABLE `products` ADD COLUMN `llm` text" },
+  { check: "tags", sql: "ALTER TABLE `products` ADD COLUMN `tags` text" },
 ];
 
 export async function GET() {
@@ -37,7 +41,7 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ success: true, message: "Migration completed (v0.0.3)" });
+    return NextResponse.json({ success: true, message: "Migration completed (v0.0.5)" });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: String(error) },

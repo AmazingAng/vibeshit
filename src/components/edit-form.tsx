@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ImageUpload } from "@/components/image-upload";
 
 type Product = {
   name: string;
@@ -13,7 +14,11 @@ type Product = {
   description: string | null;
   url: string;
   logoUrl: string | null;
+  bannerUrl: string | null;
   githubUrl: string | null;
+  agent: string | null;
+  llm: string | null;
+  tags: string | null;
 };
 
 export function EditForm({ slug, product }: { slug: string; product: Product }) {
@@ -59,9 +64,44 @@ export function EditForm({ slug, product }: { slug: string; product: Product }) 
         />
       </div>
 
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-[auto_1fr]">
+        <ImageUpload
+          name="logoUrl"
+          type="logo"
+          label="Logo"
+          defaultValue={product.logoUrl}
+          hint="Square, max 2MB"
+        />
+        <ImageUpload
+          name="bannerUrl"
+          type="banner"
+          label="Banner"
+          defaultValue={product.bannerUrl}
+          hint="1200×630px recommended, max 5MB"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="agent" className="font-mono text-xs">Agent</Label>
+          <Input id="agent" name="agent" defaultValue={product.agent ?? ""} placeholder="e.g. Cursor, Claude Code" maxLength={100} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="llm" className="font-mono text-xs">LLM</Label>
+          <Input id="llm" name="llm" defaultValue={product.llm ?? ""} placeholder="e.g. Claude Sonnet 4.5" maxLength={100} />
+        </div>
+      </div>
+
       <div className="space-y-2">
-        <Label htmlFor="logoUrl" className="font-mono text-xs">Logo URL</Label>
-        <Input id="logoUrl" name="logoUrl" type="url" defaultValue={product.logoUrl ?? ""} />
+        <Label htmlFor="tags" className="font-mono text-xs">Tags</Label>
+        <Input
+          id="tags"
+          name="tags"
+          defaultValue={product.tags ? JSON.parse(product.tags).join(", ") : ""}
+          placeholder="e.g. ai, saas, developer-tools"
+          maxLength={500}
+        />
+        <p className="text-xs text-muted-foreground">Comma-separated tags.</p>
       </div>
 
       <div className="space-y-2">

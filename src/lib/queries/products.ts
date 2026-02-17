@@ -10,7 +10,11 @@ export type ProductWithVote = {
   description: string | null;
   url: string;
   logoUrl: string | null;
+  bannerUrl: string | null;
   githubUrl: string | null;
+  agent: string | null;
+  llm: string | null;
+  tags: string | null;
   userId: string;
   launchDate: string;
   shitCount: number;

@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
 import { getProductBySlug, getCommentsByProductId } from "@/lib/queries/products";
 import { ShitButton } from "@/components/shit-button";
+import { ShareButton } from "@/components/share-button";
 import { CommentSection } from "@/components/comment-section";
 import { ProductActions } from "@/components/product-actions";
 import { Separator } from "@/components/ui/separator";
@@ -22,6 +23,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!product) return { title: "Not Found" };
 
+  const bannerAbsoluteUrl = product.bannerUrl
+    ? product.bannerUrl.startsWith("/")
+      ? `https://vibeshit.org${product.bannerUrl}`
+      : product.bannerUrl
+    : null;
+
+  const images = bannerAbsoluteUrl
+    ? [{ url: bannerAbsoluteUrl, width: 1200, height: 630 }]
+    : [];
+
   return {
     title: `${product.name} - Vibe Shit`,
     description: product.tagline,
@@ -30,11 +41,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: product.tagline,
       type: "website",
       url: `https://vibeshit.org/product/${slug}`,
+      ...(images.length > 0 && { images }),
     },
     twitter: {
-      card: "summary",
+      card: bannerAbsoluteUrl ? "summary_large_image" : "summary",
       title: `${product.name} - Vibe Shit`,
       description: product.tagline,
+      ...(bannerAbsoluteUrl && { images: [bannerAbsoluteUrl] }),
     },
   };
 }
@@ -88,6 +101,11 @@ export default async function ProductPage({ params }: Props) {
                 GitHub
               </a>
             )}
+            <ShareButton
+              productName={product.name}
+              productTagline={product.tagline}
+              productSlug={slug}
+            />
             {isOwner && <ProductActions slug={slug} />}
           </div>
         </div>
@@ -99,6 +117,41 @@ export default async function ProductPage({ params }: Props) {
           isAuthenticated={!!session?.user}
         />
       </div>
+
+      {product.bannerUrl && (
+        <div className="mt-8">
+          <img
+            src={product.bannerUrl}
+            alt={`${product.name} banner`}
+            className="w-full rounded-xl border border-border object-cover"
+            style={{ aspectRatio: "1200/630" }}
+          />
+        </div>
+      )}
+
+      {(product.agent || product.llm || product.tags) && (
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          {product.agent && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 font-mono text-xs">
+              <span className="text-muted-foreground">Agent:</span> {product.agent}
+            </span>
+          )}
+          {product.llm && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 font-mono text-xs">
+              <span className="text-muted-foreground">LLM:</span> {product.llm}
+            </span>
+          )}
+          {product.tags &&
+            (JSON.parse(product.tags) as string[]).map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-primary/10 px-2.5 py-0.5 font-mono text-xs text-primary"
+              >
+                #{tag}
+              </span>
+            ))}
+        </div>
+      )}
 
       <Separator className="my-8" />
 

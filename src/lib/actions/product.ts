@@ -9,17 +9,26 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+const imageUrlSchema = z.string().refine(
+  (val) => val === "" || val.startsWith("/api/image/") || val.startsWith("http://") || val.startsWith("https://"),
+  { message: "Invalid image URL" }
+).optional().or(z.literal(""));
+
 const submitSchema = z.object({
   name: z.string().min(1, "Name is required").max(80),
   tagline: z.string().min(1, "Tagline is required").max(120),
   description: z.string().max(2000).optional(),
   url: z.string().url("Invalid URL"),
-  logoUrl: z.string().url("Invalid logo URL").optional().or(z.literal("")),
+  logoUrl: imageUrlSchema,
+  bannerUrl: imageUrlSchema,
   githubUrl: z
     .string()
     .url("Invalid GitHub URL")
     .optional()
     .or(z.literal("")),
+  agent: z.string().max(100).optional(),
+  llm: z.string().max(100).optional(),
+  tags: z.string().max(500).optional(),
 });
 
 function slugify(text: string): string {
@@ -42,7 +51,11 @@ export async function submitProduct(formData: FormData) {
     description: (formData.get("description") as string) || undefined,
     url: formData.get("url") as string,
     logoUrl: (formData.get("logoUrl") as string) || "",
+    bannerUrl: (formData.get("bannerUrl") as string) || "",
     githubUrl: (formData.get("githubUrl") as string) || "",
+    agent: (formData.get("agent") as string) || undefined,
+    llm: (formData.get("llm") as string) || undefined,
+    tags: (formData.get("tags") as string) || undefined,
   };
 
   const result = submitSchema.safeParse(raw);
@@ -65,6 +78,10 @@ export async function submitProduct(formData: FormData) {
 
   const today = new Date().toISOString().split("T")[0];
 
+  const tagsArray = data.tags
+    ? data.tags.split(",").map((t) => t.trim()).filter(Boolean)
+    : [];
+
   await db.insert(products).values({
     name: data.name,
     slug,
@@ -72,7 +89,11 @@ export async function submitProduct(formData: FormData) {
     description: data.description || null,
     url: data.url,
     logoUrl: data.logoUrl || null,
+    bannerUrl: data.bannerUrl || null,
     githubUrl: data.githubUrl || null,
+    agent: data.agent || null,
+    llm: data.llm || null,
+    tags: tagsArray.length > 0 ? JSON.stringify(tagsArray) : null,
     userId: session.user.id,
     launchDate: today,
   });
@@ -101,7 +122,11 @@ export async function updateProduct(slug: string, formData: FormData) {
     description: (formData.get("description") as string) || undefined,
     url: formData.get("url") as string,
     logoUrl: (formData.get("logoUrl") as string) || "",
+    bannerUrl: (formData.get("bannerUrl") as string) || "",
     githubUrl: (formData.get("githubUrl") as string) || "",
+    agent: (formData.get("agent") as string) || undefined,
+    llm: (formData.get("llm") as string) || undefined,
+    tags: (formData.get("tags") as string) || undefined,
   };
 
   const result = submitSchema.safeParse(raw);
@@ -110,6 +135,9 @@ export async function updateProduct(slug: string, formData: FormData) {
   }
 
   const data = result.data;
+  const tagsArray = data.tags
+    ? data.tags.split(",").map((t) => t.trim()).filter(Boolean)
+    : [];
 
   await db
     .update(products)
@@ -119,7 +147,11 @@ export async function updateProduct(slug: string, formData: FormData) {
       description: data.description || null,
       url: data.url,
       logoUrl: data.logoUrl || null,
+      bannerUrl: data.bannerUrl || null,
       githubUrl: data.githubUrl || null,
+      agent: data.agent || null,
+      llm: data.llm || null,
+      tags: tagsArray.length > 0 ? JSON.stringify(tagsArray) : null,
     })
     .where(eq(products.slug, slug));
 

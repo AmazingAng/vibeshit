@@ -8,6 +8,7 @@ declare namespace Cloudflare {
 		NEXTJS_ENV: string;
 		WORKER_SELF_REFERENCE: Fetcher /* vibeshit */;
 		DB: D1Database;
+		UPLOADS: R2Bucket;
 	}
 }
 interface CloudflareEnv extends Cloudflare.Env {}
