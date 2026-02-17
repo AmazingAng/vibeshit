@@ -1,13 +1,15 @@
-import { auth } from "@/auth";
+import { auth, signIn } from "@/auth";
 import { getDb } from "@/lib/db";
-import { getProductsByDate } from "@/lib/queries/products";
+import { getProductsByDate, getFilterOptions } from "@/lib/queries/products";
 import { ProductCard } from "@/components/product-card";
+import { FilterBar } from "@/components/filter-bar";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 
 type Props = {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string; agent?: string; llm?: string; tag?: string }>;
 };
 
 function formatDate(dateStr: string) {
@@ -35,14 +37,20 @@ function getAdjacentDate(dateStr: string, offset: number) {
 }
 
 export default async function Home({ searchParams }: Props) {
-  const { date: dateFilter } = await searchParams;
+  const { date: dateFilter, agent, llm, tag } = await searchParams;
   const session = await auth();
   const { env } = await getCloudflareContext({ async: true });
   const db = getDb(env.DB);
 
-  const groups = await getProductsByDate(db, session?.user?.id, dateFilter);
+  const filters = (agent || llm || tag) ? { agent, llm, tag } : undefined;
+  const [groups, filterOptions] = await Promise.all([
+    getProductsByDate(db, session?.user?.id, dateFilter, filters),
+    getFilterOptions(db),
+  ]);
+
   const today = new Date().toISOString().split("T")[0];
   const isFiltered = !!dateFilter;
+  const hasFilterActive = !!(agent || llm || tag);
 
   return (
     <div>
@@ -76,22 +84,54 @@ export default async function Home({ searchParams }: Props) {
         </div>
       )}
 
+      <FilterBar
+        agents={filterOptions.agents}
+        llms={filterOptions.llms}
+        tags={filterOptions.tags}
+      />
+
       {groups.length === 0 ? (
-        <div className="py-20 text-center">
-          <p className="text-6xl">💩</p>
-          <h2 className="mt-4 font-mono text-lg font-bold">No shit yet</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {isFiltered
-              ? "No products launched on this day."
-              : "Be the first to submit a vibe coding project."}
+        <div className="py-16 text-center">
+          <img src="/logo-256.png" alt="" className="mx-auto h-20 w-20" />
+          <h2 className="mt-6 font-mono text-xl font-bold">
+            {hasFilterActive
+              ? "No matching shit"
+              : isFiltered
+                ? "No shit on this day"
+                : "No shit yet"}
+          </h2>
+          <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
+            {hasFilterActive
+              ? "Try adjusting your filters or clearing them."
+              : isFiltered
+                ? "No products were launched on this day."
+                : "Vibeshit is where vibe coders share what they built. Submit your project, tell us which agent & LLM you used, and let the community give it a 💩."}
           </p>
-          {isFiltered && (
+          {hasFilterActive ? null : isFiltered ? (
             <Link
               href="/"
-              className="mt-4 inline-block rounded-md border border-border px-4 py-2 font-mono text-xs transition-colors hover:bg-muted"
+              className="mt-6 inline-block rounded-md border border-border px-4 py-2 font-mono text-xs transition-colors hover:bg-muted"
             >
               Back to today
             </Link>
+          ) : session?.user ? (
+            <Link href="/submit" className="mt-6 inline-block">
+              <Button size="lg" className="font-mono text-sm">
+                Submit your shit &rarr;
+              </Button>
+            </Link>
+          ) : (
+            <form
+              action={async () => {
+                "use server";
+                await signIn("github", { redirectTo: "/submit" });
+              }}
+              className="mt-6 inline-block"
+            >
+              <Button type="submit" size="lg" className="font-mono text-sm">
+                Sign in & submit your shit &rarr;
+              </Button>
+            </form>
           )}
         </div>
       ) : (

@@ -8,6 +8,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { slugify as translitSlugify } from "transliteration";
 
 const imageUrlSchema = z.string().refine(
   (val) => val === "" || val.startsWith("/api/image/") || val.startsWith("http://") || val.startsWith("https://"),
@@ -32,11 +33,12 @@ const submitSchema = z.object({
 });
 
 function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 60);
+  const slug = translitSlugify(text, {
+    lowercase: true,
+    separator: "-",
+    allowedChars: "a-zA-Z0-9",
+  }).slice(0, 60);
+  return slug || `project-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export async function submitProduct(formData: FormData) {

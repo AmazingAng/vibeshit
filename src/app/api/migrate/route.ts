@@ -1,5 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const MIGRATIONS = [
   // v0.0.1 - Initial schema
@@ -25,7 +25,14 @@ const ALTER_STATEMENTS = [
   { check: "tags", sql: "ALTER TABLE `products` ADD COLUMN `tags` text" },
 ];
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const secret = request.nextUrl.searchParams.get("secret");
+  const expected = process.env.MIGRATE_SECRET;
+
+  if (!expected || secret !== expected) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { env } = await getCloudflareContext({ async: true });
 

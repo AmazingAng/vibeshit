@@ -1,13 +1,14 @@
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { getTrendingProducts } from "@/lib/queries/products";
+import { getTrendingProducts, getFilterOptions } from "@/lib/queries/products";
 import { ProductCard } from "@/components/product-card";
+import { FilterBar } from "@/components/filter-bar";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 type Props = {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; agent?: string; llm?: string; tag?: string }>;
 };
 
 export const metadata = {
@@ -15,7 +16,7 @@ export const metadata = {
 };
 
 export default async function TrendingPage({ searchParams }: Props) {
-  const { period: rawPeriod } = await searchParams;
+  const { period: rawPeriod, agent, llm, tag } = await searchParams;
   const period = (rawPeriod === "week" || rawPeriod === "month" || rawPeriod === "all")
     ? rawPeriod
     : "week";
@@ -24,7 +25,11 @@ export default async function TrendingPage({ searchParams }: Props) {
   const { env } = await getCloudflareContext({ async: true });
   const db = getDb(env.DB);
 
-  const products = await getTrendingProducts(db, period, session?.user?.id);
+  const filters = (agent || llm || tag) ? { agent, llm, tag } : undefined;
+  const [products, filterOptions] = await Promise.all([
+    getTrendingProducts(db, period, session?.user?.id, filters),
+    getFilterOptions(db),
+  ]);
 
   const tabs = [
     { label: "This Week", value: "week" },
@@ -56,9 +61,19 @@ export default async function TrendingPage({ searchParams }: Props) {
         </div>
       </div>
 
+      <div className="mt-4">
+        <FilterBar
+          agents={filterOptions.agents}
+          llms={filterOptions.llms}
+          tags={filterOptions.tags}
+        />
+      </div>
+
       {products.length === 0 ? (
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          No trending products yet.
+          {(agent || llm || tag)
+            ? "No products match the current filters."
+            : "No trending products yet."}
         </p>
       ) : (
         <div className="divide-y divide-border">

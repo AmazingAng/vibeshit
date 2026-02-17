@@ -75,7 +75,8 @@ function enrichProducts(
 export async function getProductsByDate(
   db: Database,
   currentUserId?: string,
-  dateFilter?: string
+  dateFilter?: string,
+  filters?: { agent?: string; llm?: string; tag?: string }
 ) {
   let query;
   if (dateFilter) {
@@ -93,11 +94,15 @@ export async function getProductsByDate(
     });
   }
 
+  const filtered = filters
+    ? query.filter((p) => matchesFilters(p, filters))
+    : query;
+
   const usersMap = await getUsersMap(db);
   const userVotes = currentUserId
     ? await getUserVotes(db, currentUserId)
     : new Set<string>();
-  const enriched = enrichProducts(query, usersMap, userVotes);
+  const enriched = enrichProducts(filtered, usersMap, userVotes);
 
   const grouped = new Map<string, ProductWithVote[]>();
   for (const p of enriched) {
@@ -266,7 +271,8 @@ export async function searchProducts(
 export async function getTrendingProducts(
   db: Database,
   period: "week" | "month" | "all",
-  currentUserId?: string
+  currentUserId?: string,
+  filters?: { agent?: string; llm?: string; tag?: string }
 ) {
   const now = new Date();
   let dateFrom: string | null = null;
@@ -298,15 +304,73 @@ export async function getTrendingProducts(
     });
   }
 
+  const filtered = filters
+    ? rawProducts.filter((p) => matchesFilters(p, filters))
+    : rawProducts;
+
   const usersMap = await getUsersMap(db);
   const userVotes = currentUserId
     ? await getUserVotes(db, currentUserId)
     : new Set<string>();
-  return enrichProducts(rawProducts, usersMap, userVotes);
+  return enrichProducts(filtered, usersMap, userVotes);
 }
 
 export async function getAllProducts(db: Database) {
   return db.query.products.findMany({
     orderBy: [desc(products.createdAt)],
   });
+}
+
+export type FilterOptions = {
+  agents: string[];
+  llms: string[];
+  tags: string[];
+};
+
+export async function getFilterOptions(db: Database): Promise<FilterOptions> {
+  const allProducts = await db
+    .select({ agent: products.agent, llm: products.llm, tags: products.tags })
+    .from(products)
+    .where(eq(products.status, "approved"));
+
+  const agentsSet = new Set<string>();
+  const llmsSet = new Set<string>();
+  const tagsSet = new Set<string>();
+
+  for (const p of allProducts) {
+    if (p.agent) agentsSet.add(p.agent);
+    if (p.llm) llmsSet.add(p.llm);
+    if (p.tags) {
+      try {
+        const arr = JSON.parse(p.tags) as string[];
+        for (const t of arr) tagsSet.add(t);
+      } catch {
+        // ignore malformed JSON
+      }
+    }
+  }
+
+  return {
+    agents: Array.from(agentsSet).sort(),
+    llms: Array.from(llmsSet).sort(),
+    tags: Array.from(tagsSet).sort(),
+  };
+}
+
+function matchesFilters(
+  product: { agent: string | null; llm: string | null; tags: string | null },
+  filters: { agent?: string; llm?: string; tag?: string }
+): boolean {
+  if (filters.agent && product.agent !== filters.agent) return false;
+  if (filters.llm && product.llm !== filters.llm) return false;
+  if (filters.tag) {
+    if (!product.tags) return false;
+    try {
+      const arr = JSON.parse(product.tags) as string[];
+      if (!arr.includes(filters.tag)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }

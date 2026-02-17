@@ -30,7 +30,7 @@ export async function Nav() {
           {session?.user ? (
             <>
               <Link href="/submit">
-                <Button variant="outline" size="sm" className="font-mono text-xs">
+                <Button size="sm" className="font-mono text-xs">
                   Submit
                 </Button>
               </Link>
@@ -45,16 +45,28 @@ export async function Nav() {
               />
             </>
           ) : (
-            <form
-              action={async () => {
-                "use server";
-                await signIn("github");
-              }}
-            >
-              <Button type="submit" variant="outline" size="sm" className="font-mono text-xs">
-                Sign in
-              </Button>
-            </form>
+            <>
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("github", { redirectTo: "/submit" });
+                }}
+              >
+                <Button type="submit" size="sm" className="font-mono text-xs">
+                  Submit
+                </Button>
+              </form>
+              <form
+                action={async () => {
+                  "use server";
+                  await signIn("github");
+                }}
+              >
+                <Button type="submit" variant="outline" size="sm" className="font-mono text-xs">
+                  Sign in
+                </Button>
+              </form>
+            </>
           )}
         </div>
       </nav>
