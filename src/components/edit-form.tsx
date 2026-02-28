@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ImageUpload } from "@/components/image-upload";
+import { GalleryUpload } from "@/components/gallery-upload";
 
 type Product = {
   name: string;
@@ -15,6 +16,7 @@ type Product = {
   url: string;
   logoUrl: string | null;
   bannerUrl: string | null;
+  images: string | null;
   githubUrl: string | null;
   agent: string | null;
   llm: string | null;
@@ -54,41 +56,44 @@ export function EditForm({ slug, product }: { slug: string; product: Product }) 
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="description" className="font-mono text-xs">Description</Label>
+        <Label htmlFor="description" className="font-mono text-xs">Description *</Label>
         <Textarea
           id="description"
           name="description"
           defaultValue={product.description ?? ""}
           rows={4}
           maxLength={2000}
+          required
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-[auto_1fr]">
-        <ImageUpload
-          name="logoUrl"
-          type="logo"
-          label="Logo"
-          defaultValue={product.logoUrl}
-          hint="Square, max 2MB"
-        />
-        <ImageUpload
-          name="bannerUrl"
-          type="banner"
-          label="Banner"
-          defaultValue={product.bannerUrl}
-          hint="1200×630px recommended, max 5MB"
-        />
-      </div>
+      <ImageUpload
+        name="logoUrl"
+        type="logo"
+        label="Logo *"
+        defaultValue={product.logoUrl}
+        hint="Square, max 2MB"
+      />
+
+      <GalleryUpload
+        name="images"
+        defaultValue={
+          product.images
+            ? JSON.parse(product.images)
+            : product.bannerUrl
+              ? [product.bannerUrl]
+              : []
+        }
+      />
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="agent" className="font-mono text-xs">Agent</Label>
-          <Input id="agent" name="agent" defaultValue={product.agent ?? ""} placeholder="e.g. Cursor, Claude Code" maxLength={100} />
+          <Label htmlFor="agent" className="font-mono text-xs">Agent *</Label>
+          <Input id="agent" name="agent" defaultValue={product.agent ?? ""} placeholder="e.g. Cursor, Claude Code" maxLength={100} required />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="llm" className="font-mono text-xs">LLM</Label>
-          <Input id="llm" name="llm" defaultValue={product.llm ?? ""} placeholder="e.g. Claude Sonnet 4.5" maxLength={100} />
+          <Label htmlFor="llm" className="font-mono text-xs">LLM *</Label>
+          <Input id="llm" name="llm" defaultValue={product.llm ?? ""} placeholder="e.g. Claude Sonnet 4.5" maxLength={100} required />
         </div>
       </div>
 

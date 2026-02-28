@@ -87,7 +87,6 @@ export default async function Home({ searchParams }: Props) {
       <FilterBar
         agents={filterOptions.agents}
         llms={filterOptions.llms}
-        tags={filterOptions.tags}
       />
 
       {groups.length === 0 ? (

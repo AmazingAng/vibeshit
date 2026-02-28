@@ -65,7 +65,6 @@ export default async function TrendingPage({ searchParams }: Props) {
         <FilterBar
           agents={filterOptions.agents}
           llms={filterOptions.llms}
-          tags={filterOptions.tags}
         />
       </div>
 

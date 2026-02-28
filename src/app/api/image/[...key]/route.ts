@@ -1,8 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
-  _request: NextRequest,
+  _request: Request,
   { params }: { params: Promise<{ key: string[] }> }
 ) {
   const { key } = await params;
@@ -12,15 +11,17 @@ export async function GET(
   const object = await env.UPLOADS.get(objectKey);
 
   if (!object) {
-    return new NextResponse("Not found", { status: 404 });
+    return new Response("Not found", { status: 404 });
   }
 
-  const headers = new Headers();
-  headers.set(
-    "Content-Type",
-    object.httpMetadata?.contentType ?? "application/octet-stream"
-  );
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  const body = await object.arrayBuffer();
 
-  return new NextResponse(object.body, { headers });
+  return new Response(body, {
+    headers: {
+      "Content-Type":
+        object.httpMetadata?.contentType ?? "application/octet-stream",
+      "Content-Length": body.byteLength.toString(),
+      "Cache-Control": "public, max-age=31536000, immutable",
+    },
+  });
 }

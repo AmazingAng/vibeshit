@@ -1,5 +1,5 @@
-import { desc, eq, sql, and, gte, like, or } from "drizzle-orm";
-import { products, votes, users, comments } from "@/lib/db/schema";
+import { desc, eq, sql, and, gte, lt, like, or } from "drizzle-orm";
+import { products, votes, users, comments, sotd } from "@/lib/db/schema";
 import type { Database } from "@/lib/db";
 
 export type ProductWithVote = {
@@ -11,6 +11,7 @@ export type ProductWithVote = {
   url: string;
   logoUrl: string | null;
   bannerUrl: string | null;
+  images: string | null;
   githubUrl: string | null;
   agent: string | null;
   llm: string | null;
@@ -246,6 +247,21 @@ export async function getUserByUsername(db: Database, username: string) {
   return user[0] ?? null;
 }
 
+export async function updateUserProfile(
+  db: Database,
+  userId: string,
+  data: {
+    bio?: string | null;
+    wechat?: string | null;
+    showWechat?: boolean;
+    twitterHandle?: string | null;
+    telegram?: string | null;
+    showTelegram?: boolean;
+  }
+) {
+  await db.update(users).set(data).where(eq(users.id, userId));
+}
+
 export async function searchProducts(
   db: Database,
   query: string,
@@ -373,4 +389,190 @@ function matchesFilters(
     }
   }
   return true;
+}
+
+// ============ SOTD (Shit of the Day) ============
+
+export type SOTDResult = {
+  date: string;
+  productId: string;
+  productName: string;
+  productSlug: string;
+  productTagline: string;
+  productLogoUrl: string | null;
+  voteCount: number;
+  userName: string | null;
+  userUsername: string | null;
+} | null;
+
+function getUTCDateString(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
+
+function getYesterdayUTC(): string {
+  const now = new Date();
+  const yesterday = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - 1
+  ));
+  return getUTCDateString(yesterday);
+}
+
+function getTodayUTC(): string {
+  const now = new Date();
+  return getUTCDateString(new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate()
+  )));
+}
+
+/**
+ * Calculate the top voted product for a specific UTC date.
+ * Counts votes where createdAt falls within [date 00:00, date+1 00:00) UTC.
+ */
+async function calculateSOTDForDate(db: Database, date: string) {
+  const dayStart = `${date}T00:00:00.000Z`;
+  const nextDay = new Date(date + "T00:00:00.000Z");
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const dayEnd = nextDay.toISOString();
+
+  const results = await db
+    .select({
+      productId: votes.productId,
+      voteCount: sql<number>`COUNT(*)`.as("voteCount"),
+    })
+    .from(votes)
+    .where(
+      and(
+        gte(votes.createdAt, dayStart),
+        lt(votes.createdAt, dayEnd)
+      )
+    )
+    .groupBy(votes.productId)
+    .orderBy(sql`COUNT(*) DESC`)
+    .limit(1);
+
+  if (results.length === 0) return null;
+
+  return {
+    productId: results[0].productId,
+    voteCount: results[0].voteCount,
+  };
+}
+
+/**
+ * Settle (freeze) SOTD for a given date.
+ * Calculates the winner and stores it in the sotd table.
+ * Returns the settled result or null if no votes that day.
+ */
+export async function settleSOTD(db: Database, date: string) {
+  const existing = await db
+    .select()
+    .from(sotd)
+    .where(eq(sotd.date, date))
+    .limit(1);
+
+  if (existing.length > 0) {
+    return existing[0];
+  }
+
+  const winner = await calculateSOTDForDate(db, date);
+  if (!winner) return null;
+
+  const result = await db
+    .insert(sotd)
+    .values({
+      date,
+      productId: winner.productId,
+      voteCount: winner.voteCount,
+    })
+    .returning();
+
+  return result[0] ?? null;
+}
+
+/**
+ * Get the current SOTD to display.
+ * Strategy: lazy settlement — on first access after midnight,
+ * automatically settles yesterday's SOTD.
+ * Returns yesterday's SOTD (the most recent settled one).
+ */
+export async function getSOTD(db: Database): Promise<SOTDResult> {
+  const yesterday = getYesterdayUTC();
+
+  // Lazy settle: ensure yesterday is settled
+  await settleSOTD(db, yesterday);
+
+  // Get the most recent SOTD
+  const result = await db
+    .select({
+      date: sotd.date,
+      productId: sotd.productId,
+      voteCount: sotd.voteCount,
+      productName: products.name,
+      productSlug: products.slug,
+      productTagline: products.tagline,
+      productLogoUrl: products.logoUrl,
+      userName: users.name,
+      userUsername: users.username,
+    })
+    .from(sotd)
+    .innerJoin(products, eq(sotd.productId, products.id))
+    .innerJoin(users, eq(products.userId, users.id))
+    .orderBy(desc(sotd.date))
+    .limit(1);
+
+  if (result.length === 0) return null;
+
+  return result[0];
+}
+
+/**
+ * Get today's live leaderboard (real-time, not settled yet).
+ * Shows current top product for today.
+ */
+export async function getTodayLiveLeader(db: Database): Promise<{
+  productId: string;
+  productName: string;
+  productSlug: string;
+  productLogoUrl: string | null;
+  voteCount: number;
+} | null> {
+  const today = getTodayUTC();
+  const dayStart = `${today}T00:00:00.000Z`;
+
+  const results = await db
+    .select({
+      productId: votes.productId,
+      voteCount: sql<number>`COUNT(*)`.as("voteCount"),
+    })
+    .from(votes)
+    .where(gte(votes.createdAt, dayStart))
+    .groupBy(votes.productId)
+    .orderBy(sql`COUNT(*) DESC`)
+    .limit(1);
+
+  if (results.length === 0) return null;
+
+  const product = await db
+    .select({
+      name: products.name,
+      slug: products.slug,
+      logoUrl: products.logoUrl,
+    })
+    .from(products)
+    .where(eq(products.id, results[0].productId))
+    .limit(1);
+
+  if (product.length === 0) return null;
+
+  return {
+    productId: results[0].productId,
+    productName: product[0].name,
+    productSlug: product[0].slug,
+    productLogoUrl: product[0].logoUrl,
+    voteCount: results[0].voteCount,
+  };
 }

@@ -124,3 +124,70 @@
     @apply bg-background text-foreground;
 	}
 }
+
+/* SOTD Banner Animations */
+@keyframes sotd-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes sotd-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(234, 179, 8, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(234, 179, 8, 0.5), 0 0 40px rgba(234, 179, 8, 0.2); }
+}
+
+@keyframes sotd-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes sotd-pulse-border {
+  0%, 100% { border-color: rgba(234, 179, 8, 0.4); }
+  50% { border-color: rgba(234, 179, 8, 0.8); }
+}
+
+.sotd-banner {
+  animation: sotd-glow 3s ease-in-out infinite, sotd-pulse-border 3s ease-in-out infinite;
+}
+
+.sotd-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    #92400e 0%,
+    #f59e0b 25%,
+    #fbbf24 50%,
+    #f59e0b 75%,
+    #92400e 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: sotd-shimmer 3s linear infinite;
+}
+
+.dark .sotd-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    #fbbf24 0%,
+    #fef3c7 25%,
+    #fffbeb 50%,
+    #fef3c7 75%,
+    #fbbf24 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.sotd-emoji {
+  animation: sotd-float 2s ease-in-out infinite;
+  display: inline-block;
+}
+
+.sotd-emoji-delay {
+  animation: sotd-float 2s ease-in-out infinite;
+  animation-delay: 0.5s;
+  display: inline-block;
+}

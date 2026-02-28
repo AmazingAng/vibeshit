@@ -3,9 +3,11 @@ import { getDb } from "@/lib/db";
 import { getUserByUsername, getProductsByUser, getVotedProducts } from "@/lib/queries/products";
 import { ProductCard } from "@/components/product-card";
 import { Separator } from "@/components/ui/separator";
+import { UserProfileEditor } from "@/components/user-profile-editor";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { Twitter, MessageCircle, AtSign, Github } from "lucide-react";
 
 type Props = {
   params: Promise<{ username: string }>;
@@ -29,24 +31,106 @@ export default async function UserPage({ params }: Props) {
   const user = await getUserByUsername(db, username);
   if (!user) notFound();
 
+  const isOwner = session?.user?.id === user.id;
   const userProducts = await getProductsByUser(db, username, session?.user?.id);
   const votedProducts = await getVotedProducts(db, username, session?.user?.id);
 
+  const { bio, wechat, showWechat, twitterHandle, telegram, showTelegram } = user;
+
+  // GitHub username is stored in user.username (set on OAuth sign-in)
+  const githubUsername = user.username;
+
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="flex items-center gap-4">
+      <div className="flex items-start gap-4">
         {user.image && (
           <img
             src={user.image}
             alt={user.name ?? ""}
-            className="h-16 w-16 rounded-full border border-border"
+            className="h-16 w-16 shrink-0 rounded-full border border-border"
           />
         )}
-        <div>
-          <h1 className="text-xl font-bold">{user.name ?? "Anonymous"}</h1>
-          {user.username && (
-            <p className="text-sm text-muted-foreground">@{user.username}</p>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <h1 className="text-xl font-bold">{user.name ?? "Anonymous"}</h1>
+              {githubUsername && (
+                <p className="text-sm text-muted-foreground">@{githubUsername}</p>
+              )}
+            </div>
+            {isOwner && (
+              <UserProfileEditor
+                initial={{
+                  bio,
+                  wechat,
+                  showWechat: showWechat ?? false,
+                  twitterHandle,
+                  telegram,
+                  showTelegram: showTelegram ?? false,
+                }}
+              />
+            )}
+          </div>
+
+          {bio && (
+            <p className="mt-2 text-sm text-muted-foreground">{bio}</p>
           )}
+
+          {/* Social links */}
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {/* GitHub — always shown */}
+            {githubUsername && (
+              <a
+                href={`https://github.com/${githubUsername}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Github className="h-3.5 w-3.5" />
+                {githubUsername}
+              </a>
+            )}
+
+            {/* Twitter — always shown if set */}
+            {twitterHandle && (
+              <a
+                href={`https://x.com/${twitterHandle}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Twitter className="h-3.5 w-3.5" />
+                @{twitterHandle}
+              </a>
+            )}
+
+            {/* Telegram — only shown if user opted in */}
+            {telegram && (isOwner || showTelegram) && (
+              <a
+                href={`https://t.me/${telegram}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                @{telegram}
+                {isOwner && !showTelegram && (
+                  <span className="text-xs text-muted-foreground/50">(only you)</span>
+                )}
+              </a>
+            )}
+
+            {/* WeChat — only shown if user opted in */}
+            {wechat && (isOwner || showWechat) && (
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <AtSign className="h-3.5 w-3.5" />
+                {wechat}
+                {isOwner && !showWechat && (
+                  <span className="text-xs text-muted-foreground/50">(only you)</span>
+                )}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

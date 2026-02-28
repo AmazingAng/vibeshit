@@ -52,7 +52,11 @@
 	"routes": [
 		{ "pattern": "vibeshit.org", "custom_domain": true },
 		{ "pattern": "www.vibeshit.org", "custom_domain": true }
-	]
+	],
+	"vars": {
+		"AI_REVIEW_BASE_URL": "http://changme.sbs:8317/v1",
+		"AI_REVIEW_MODEL": "gpt-5.3-codex"
+	}
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

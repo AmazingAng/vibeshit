@@ -6,10 +6,9 @@ import { useCallback } from "react";
 interface FilterBarProps {
   agents: string[];
   llms: string[];
-  tags: string[];
 }
 
-export function FilterBar({ agents, llms, tags }: FilterBarProps) {
+export function FilterBar({ agents, llms }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -18,7 +17,7 @@ export function FilterBar({ agents, llms, tags }: FilterBarProps) {
   const currentLlm = searchParams.get("llm") ?? "";
   const currentTag = searchParams.get("tag") ?? "";
 
-  const hasAny = agents.length > 0 || llms.length > 0 || tags.length > 0;
+  const hasAny = agents.length > 0 || llms.length > 0;
   const hasActive = currentAgent || currentLlm || currentTag;
 
   const update = useCallback(
@@ -44,7 +43,7 @@ export function FilterBar({ agents, llms, tags }: FilterBarProps) {
     router.push(qs ? `${pathname}?${qs}` : pathname);
   }, [router, pathname, searchParams]);
 
-  if (!hasAny) return null;
+  if (!hasAny && !currentTag) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2 pb-4">
@@ -78,25 +77,13 @@ export function FilterBar({ agents, llms, tags }: FilterBarProps) {
         </select>
       )}
 
-      {tags.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          {tags.map((t) => {
-            const active = currentTag === t;
-            return (
-              <button
-                key={t}
-                onClick={() => update("tag", active ? "" : t)}
-                className={`rounded-full px-2 py-0.5 font-mono text-[11px] transition-colors ${
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-              >
-                #{t}
-              </button>
-            );
-          })}
-        </div>
+      {currentTag && (
+        <button
+          onClick={() => update("tag", "")}
+          className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 font-mono text-[11px] text-primary-foreground transition-colors hover:bg-primary/80"
+        >
+          #{currentTag} <span aria-hidden>×</span>
+        </button>
       )}
 
       {hasActive && (

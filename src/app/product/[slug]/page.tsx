@@ -23,15 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!product) return { title: "Not Found" };
 
-  const bannerAbsoluteUrl = product.bannerUrl
-    ? product.bannerUrl.startsWith("/")
-      ? `https://vibeshit.org${product.bannerUrl}`
-      : product.bannerUrl
-    : null;
-
-  const images = bannerAbsoluteUrl
-    ? [{ url: bannerAbsoluteUrl, width: 1200, height: 630 }]
-    : [];
+  const ogImage = `https://vibeshit.org/og/${slug}`;
 
   return {
     title: `${product.name} - Vibe Shit`,
@@ -41,13 +33,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: product.tagline,
       type: "website",
       url: `https://vibeshit.org/product/${slug}`,
-      ...(images.length > 0 && { images }),
+      images: [{ url: ogImage, width: 1200, height: 630 }],
     },
     twitter: {
-      card: bannerAbsoluteUrl ? "summary_large_image" : "summary",
+      card: "summary_large_image",
       title: `${product.name} - Vibe Shit`,
       description: product.tagline,
-      ...(bannerAbsoluteUrl && { images: [bannerAbsoluteUrl] }),
+      images: [ogImage],
     },
   };
 }
@@ -118,16 +110,36 @@ export default async function ProductPage({ params }: Props) {
         />
       </div>
 
-      {product.bannerUrl && (
-        <div className="mt-8">
-          <img
-            src={product.bannerUrl}
-            alt={`${product.name} banner`}
-            className="w-full rounded-xl border border-border object-cover"
-            style={{ aspectRatio: "1200/630" }}
-          />
-        </div>
-      )}
+      {(() => {
+        const imageList: string[] = product.images
+          ? JSON.parse(product.images)
+          : product.bannerUrl
+            ? [product.bannerUrl]
+            : [];
+        if (imageList.length === 0) return null;
+        return (
+          <div className="mt-8 space-y-3">
+            <img
+              src={imageList[0]}
+              alt={`${product.name} banner`}
+              className="w-full rounded-xl border border-border object-cover"
+              style={{ aspectRatio: "1200/630" }}
+            />
+            {imageList.length > 1 && (
+              <div className="grid grid-cols-3 gap-3">
+                {imageList.slice(1).map((url, i) => (
+                  <img
+                    key={i}
+                    src={url}
+                    alt={`${product.name} screenshot ${i + 2}`}
+                    className="aspect-video w-full rounded-lg border border-border object-cover"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {(product.agent || product.llm || product.tags) && (
         <div className="mt-6 flex flex-wrap items-center gap-2">

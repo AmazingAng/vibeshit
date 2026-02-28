@@ -1,19 +1,15 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { CSSProperties } from "react";
 import { Nav } from "@/components/nav";
+import { SotdBanner } from "@/components/sotd-banner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const appFontVars = {
+  "--font-geist-sans": "Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+  "--font-geist-mono": "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace",
+} as CSSProperties;
 
 export const metadata: Metadata = {
   title: "Vibe Shit - Product Hunt for Vibe Coding",
@@ -45,11 +41,10 @@ export default function RootLayout({
         <link rel="icon" href="/logo-256.png" type="image/png" />
         <link rel="apple-touch-icon" href="/logo-256.png" />
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
-      >
+      <body className="font-sans antialiased" style={appFontVars}>
         <ThemeProvider>
           <Nav />
+          <SotdBanner />
           <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
           <footer className="border-t border-border py-8 text-center text-sm text-muted-foreground">
             <p className="inline-flex items-center gap-1.5 font-mono">

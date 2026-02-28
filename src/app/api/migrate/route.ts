@@ -13,6 +13,9 @@ const MIGRATIONS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS \`votes_user_product_idx\` ON \`votes\` (\`userId\`,\`productId\`)`,
   // v0.0.2 - Comments, status, role
   `CREATE TABLE IF NOT EXISTS \`comments\` (\`id\` text PRIMARY KEY NOT NULL, \`userId\` text NOT NULL, \`productId\` text NOT NULL, \`content\` text NOT NULL, \`createdAt\` text NOT NULL, FOREIGN KEY (\`userId\`) REFERENCES \`users\`(\`id\`) ON DELETE CASCADE, FOREIGN KEY (\`productId\`) REFERENCES \`products\`(\`id\`) ON DELETE CASCADE)`,
+  // v0.0.3 - SOTD (Shit of the Day)
+  `CREATE TABLE IF NOT EXISTS \`sotd\` (\`id\` text PRIMARY KEY NOT NULL, \`date\` text NOT NULL, \`productId\` text NOT NULL, \`voteCount\` integer DEFAULT 0 NOT NULL, \`createdAt\` text NOT NULL, FOREIGN KEY (\`productId\`) REFERENCES \`products\`(\`id\`) ON DELETE CASCADE)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS \`sotd_date_unique\` ON \`sotd\` (\`date\`)`,
 ];
 
 const ALTER_STATEMENTS = [
@@ -23,6 +26,12 @@ const ALTER_STATEMENTS = [
   { check: "agent", sql: "ALTER TABLE `products` ADD COLUMN `agent` text" },
   { check: "llm", sql: "ALTER TABLE `products` ADD COLUMN `llm` text" },
   { check: "tags", sql: "ALTER TABLE `products` ADD COLUMN `tags` text" },
+  { check: "images", sql: "ALTER TABLE `products` ADD COLUMN `images` text" },
+  // v0.0.5 - User social profiles
+  { check: "bio", sql: "ALTER TABLE `users` ADD COLUMN `bio` text" },
+  { check: "wechat", sql: "ALTER TABLE `users` ADD COLUMN `wechat` text" },
+  { check: "twitterHandle", sql: "ALTER TABLE `users` ADD COLUMN `twitterHandle` text" },
+  { check: "telegram", sql: "ALTER TABLE `users` ADD COLUMN `telegram` text" },
 ];
 
 export async function GET(request: NextRequest) {

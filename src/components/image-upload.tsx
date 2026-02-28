@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 
 interface ImageUploadProps {
   name: string;
   type: "logo" | "banner";
   defaultValue?: string | null;
+  value?: string;
+  onChange?: (value: string) => void;
   label: string;
   hint?: string;
 }
@@ -14,6 +16,8 @@ export function ImageUpload({
   name,
   type,
   defaultValue,
+  value,
+  onChange,
   label,
   hint,
 }: ImageUploadProps) {
@@ -23,6 +27,15 @@ export function ImageUpload({
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isControlled = value !== undefined;
+  const currentUrl = isControlled ? value : url;
+
+  useEffect(() => {
+    if (!isControlled) return;
+    const nextValue = value ?? "";
+    setUrl(nextValue);
+    setPreview(nextValue);
+  }, [isControlled, value]);
 
   const upload = useCallback(
     async (file: File) => {
@@ -46,15 +59,17 @@ export function ImageUpload({
           return;
         }
 
-        setUrl(data.url ?? "");
-        setPreview(data.url ?? "");
+        const nextUrl = data.url ?? "";
+        if (!isControlled) setUrl(nextUrl);
+        setPreview(nextUrl);
+        onChange?.(nextUrl);
       } catch {
         setError("Upload failed. Please try again.");
       } finally {
         setUploading(false);
       }
     },
-    [type]
+    [type, isControlled, onChange]
   );
 
   const handleFile = useCallback(
@@ -102,11 +117,12 @@ export function ImageUpload({
   );
 
   const handleRemove = useCallback(() => {
-    setUrl("");
+    if (!isControlled) setUrl("");
     setPreview("");
     setError(null);
+    onChange?.("");
     if (inputRef.current) inputRef.current.value = "";
-  }, []);
+  }, [isControlled, onChange]);
 
   const isLogo = type === "logo";
   const aspectClass = isLogo ? "aspect-square w-24" : "aspect-[1200/630] w-full";
@@ -115,7 +131,7 @@ export function ImageUpload({
     <div className="space-y-2">
       <label className="font-mono text-xs font-medium">{label}</label>
 
-      <input type="hidden" name={name} value={url} />
+      <input type="hidden" name={name} value={currentUrl} />
       <input
         ref={inputRef}
         type="file"

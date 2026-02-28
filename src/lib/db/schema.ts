@@ -12,6 +12,12 @@ export const users = sqliteTable("users", {
   emailVerified: integer("emailVerified", { mode: "timestamp_ms" }),
   image: text("image"),
   role: text("role").notNull().default("user"),
+  bio: text("bio"),
+  wechat: text("wechat"),
+  showWechat: integer("showWechat", { mode: "boolean" }).notNull().default(false),
+  twitterHandle: text("twitterHandle"),
+  telegram: text("telegram"),
+  showTelegram: integer("showTelegram", { mode: "boolean" }).notNull().default(false),
 });
 
 export const accounts = sqliteTable("accounts", {
@@ -60,6 +66,7 @@ export const products = sqliteTable("products", {
   url: text("url").notNull(),
   logoUrl: text("logoUrl"),
   bannerUrl: text("bannerUrl"),
+  images: text("images"),
   githubUrl: text("githubUrl"),
   agent: text("agent"),
   llm: text("llm"),
@@ -95,6 +102,20 @@ export const votes = sqliteTable(
     uniqueIndex("votes_user_product_idx").on(table.userId, table.productId),
   ]
 );
+
+export const sotd = sqliteTable("sotd", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  date: text("date").notNull().unique(),
+  productId: text("productId")
+    .notNull()
+    .references(() => products.id, { onDelete: "cascade" }),
+  voteCount: integer("voteCount").notNull().default(0),
+  createdAt: text("createdAt")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+});
 
 export const comments = sqliteTable("comments", {
   id: text("id")
