@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 
 // ============ Auth.js tables ============
 
@@ -18,6 +18,8 @@ export const users = sqliteTable("users", {
   twitterHandle: text("twitterHandle"),
   telegram: text("telegram"),
   showTelegram: integer("showTelegram", { mode: "boolean" }).notNull().default(false),
+  wechatInvited: integer("wechatInvited", { mode: "boolean" }).notNull().default(false),
+  telegramInvited: integer("telegramInvited", { mode: "boolean" }).notNull().default(false),
 });
 
 export const accounts = sqliteTable("accounts", {
@@ -71,6 +73,8 @@ export const products = sqliteTable("products", {
   agent: text("agent"),
   llm: text("llm"),
   tags: text("tags"),
+  makerName: text("makerName"),
+  makerLink: text("makerLink"),
   userId: text("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -80,7 +84,11 @@ export const products = sqliteTable("products", {
   createdAt: text("createdAt")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
-});
+}, (table) => [
+  index("products_userId_idx").on(table.userId),
+  index("products_launchDate_idx").on(table.launchDate),
+  index("products_status_idx").on(table.status),
+]);
 
 export const votes = sqliteTable(
   "votes",
@@ -100,6 +108,7 @@ export const votes = sqliteTable(
   },
   (table) => [
     uniqueIndex("votes_user_product_idx").on(table.userId, table.productId),
+    index("votes_productId_idx").on(table.productId),
   ]
 );
 
@@ -131,4 +140,24 @@ export const comments = sqliteTable("comments", {
   createdAt: text("createdAt")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
-});
+}, (table) => [
+  index("comments_productId_idx").on(table.productId),
+]);
+
+export const eventLogs = sqliteTable("event_logs", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  type: text("type").notNull(),
+  level: text("level").notNull().default("info"),
+  message: text("message").notNull(),
+  metadata: text("metadata"),
+  userId: text("userId"),
+  createdAt: text("createdAt")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  index("event_logs_type_idx").on(table.type),
+  index("event_logs_level_idx").on(table.level),
+  index("event_logs_createdAt_idx").on(table.createdAt),
+]);

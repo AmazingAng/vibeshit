@@ -1,5 +1,7 @@
 "use client";
 
+import { useI18n } from "@/components/i18n-provider";
+
 interface ShareButtonProps {
   productName: string;
   productTagline: string;
@@ -13,8 +15,9 @@ export function ShareButton({
   productSlug,
   variant = "default",
 }: ShareButtonProps) {
+  const { messages } = useI18n();
   const url = `https://vibeshit.org/product/${productSlug}`;
-  const text = `${productName} - ${productTagline}\n\nCheck it out on Vibe Shit 💩`;
+  const text = `${productName} - ${productTagline}\n\n${messages.share.tweetText}`;
 
   const twitterUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
 
@@ -25,7 +28,7 @@ export function ShareButton({
         target="_blank"
         rel="noopener noreferrer"
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        title="Share on X"
+        title={messages.share.onX}
       >
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -44,7 +47,7 @@ export function ShareButton({
       <svg viewBox="0 0 24 24" className="h-3 w-3" fill="currentColor">
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
       </svg>
-      Share
+      {messages.share.button}
     </a>
   );
 }

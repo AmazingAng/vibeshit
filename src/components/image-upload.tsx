@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useI18n } from "@/components/i18n-provider";
 
 interface ImageUploadProps {
   name: string;
@@ -21,6 +22,7 @@ export function ImageUpload({
   label,
   hint,
 }: ImageUploadProps) {
+  const { messages } = useI18n();
   const [url, setUrl] = useState(defaultValue ?? "");
   const [preview, setPreview] = useState(defaultValue ?? "");
   const [uploading, setUploading] = useState(false);
@@ -54,7 +56,7 @@ export function ImageUpload({
         const data = (await res.json()) as { url?: string; error?: string };
 
         if (!res.ok) {
-          setError(data.error ?? "Upload failed");
+          setError(data.error ?? messages.forms.uploadFailed);
           setUploading(false);
           return;
         }
@@ -64,26 +66,26 @@ export function ImageUpload({
         setPreview(nextUrl);
         onChange?.(nextUrl);
       } catch {
-        setError("Upload failed. Please try again.");
+        setError(messages.forms.uploadFailedRetry);
       } finally {
         setUploading(false);
       }
     },
-    [type, isControlled, onChange]
+    [type, isControlled, onChange, messages.forms.uploadFailed, messages.forms.uploadFailedRetry]
   );
 
   const handleFile = useCallback(
     (file: File | undefined) => {
       if (!file) return;
       if (!file.type.startsWith("image/")) {
-        setError("Please upload an image file");
+        setError(messages.forms.invalidImage);
         return;
       }
       const localPreview = URL.createObjectURL(file);
       setPreview(localPreview);
       upload(file);
     },
-    [upload]
+    [upload, messages.forms.invalidImage]
   );
 
   const handleDrop = useCallback(
@@ -144,13 +146,13 @@ export function ImageUpload({
         <div className="relative group">
           <img
             src={preview}
-            alt="Preview"
+            alt={messages.forms.preview}
             className={`${aspectClass} rounded-lg border border-border object-cover`}
           />
           {uploading && (
             <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/70">
               <span className="font-mono text-xs text-muted-foreground animate-pulse">
-                Uploading...
+                {messages.forms.uploading}
               </span>
             </div>
           )}
@@ -160,14 +162,14 @@ export function ImageUpload({
               onClick={handleClick}
               className="rounded-md bg-background/80 px-2 py-1 font-mono text-xs text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
             >
-              Replace
+              {messages.forms.replace}
             </button>
             <button
               type="button"
               onClick={handleRemove}
               className="rounded-md bg-background/80 px-2 py-1 font-mono text-xs text-destructive shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
             >
-              Remove
+              {messages.forms.remove}
             </button>
           </div>
         </div>
@@ -197,7 +199,7 @@ export function ImageUpload({
             />
           </svg>
           <span className="font-mono text-xs text-muted-foreground">
-            {uploading ? "Uploading..." : "Drag & drop or click"}
+            {uploading ? messages.forms.uploading : messages.forms.dragDrop}
           </span>
         </div>
       )}

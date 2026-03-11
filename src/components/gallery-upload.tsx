@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useI18n } from "@/components/i18n-provider";
 
 const MAX_IMAGES = 4;
 
@@ -12,6 +13,7 @@ interface GalleryUploadProps {
 }
 
 export function GalleryUpload({ name, defaultValue = [], value, onChange }: GalleryUploadProps) {
+  const { messages } = useI18n();
   const [images, setImages] = useState<string[]>(defaultValue);
   const [previews, setPreviews] = useState<string[]>(defaultValue);
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
@@ -55,7 +57,7 @@ export function GalleryUpload({ name, defaultValue = [], value, onChange }: Gall
       const data = (await res.json()) as { url?: string; error?: string };
 
       if (!res.ok) {
-        setError(data.error ?? "Upload failed");
+        setError(data.error ?? messages.forms.uploadFailed);
         setPreviews((prev) => {
           const next = [...prev];
           if (!existedBefore) next.splice(idx, 1);
@@ -74,7 +76,7 @@ export function GalleryUpload({ name, defaultValue = [], value, onChange }: Gall
         return next;
       });
     } catch {
-      setError("Upload failed. Please try again.");
+      setError(messages.forms.uploadFailedRetry);
       setPreviews((prev) => {
         const next = [...prev];
         if (!existedBefore) next.splice(idx, 1);
@@ -83,13 +85,13 @@ export function GalleryUpload({ name, defaultValue = [], value, onChange }: Gall
     } finally {
       setUploadingIdx(null);
     }
-  }, [currentImages, applyImages]);
+  }, [currentImages, applyImages, messages.forms.uploadFailed, messages.forms.uploadFailedRetry]);
 
   const handleFile = useCallback(
     (file: File | undefined, idx: number) => {
       if (!file) return;
       if (!file.type.startsWith("image/")) {
-        setError("Please upload an image file");
+        setError(messages.forms.invalidImage);
         return;
       }
       const localPreview = URL.createObjectURL(file);
@@ -100,7 +102,7 @@ export function GalleryUpload({ name, defaultValue = [], value, onChange }: Gall
       });
       upload(file, idx, Boolean(currentImages[idx]));
     },
-    [upload, currentImages]
+    [upload, currentImages, messages.forms.invalidImage]
   );
 
   const handleAddClick = useCallback(
@@ -139,10 +141,10 @@ export function GalleryUpload({ name, defaultValue = [], value, onChange }: Gall
   return (
     <div className="space-y-2">
       <label className="font-mono text-xs font-medium">
-        Screenshots *
+        {messages.forms.screenshots}
       </label>
       <p className="text-xs text-muted-foreground">
-        Up to 4 images. First image is used as banner &amp; social preview.
+        {messages.forms.screenshotsHint}
       </p>
 
       <input type="hidden" name={name} value={JSON.stringify(currentImages)} />
@@ -164,18 +166,18 @@ export function GalleryUpload({ name, defaultValue = [], value, onChange }: Gall
           >
             <img
               src={src}
-              alt={`Image ${idx + 1}`}
+              alt={`${messages.forms.image} ${idx + 1}`}
               className="h-full w-full object-cover"
             />
             {idx === 0 && (
               <span className="absolute bottom-2 left-2 rounded bg-background/80 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground backdrop-blur-sm">
-                Banner
+                {messages.forms.banner}
               </span>
             )}
             {uploadingIdx === idx && (
               <div className="absolute inset-0 flex items-center justify-center bg-background/70">
                 <span className="animate-pulse font-mono text-xs text-muted-foreground">
-                  Uploading...
+                  {messages.forms.uploading}
                 </span>
               </div>
             )}
@@ -185,14 +187,14 @@ export function GalleryUpload({ name, defaultValue = [], value, onChange }: Gall
                 onClick={() => handleAddClick(idx)}
                 className="rounded-md bg-background/80 px-2 py-1 font-mono text-xs text-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
               >
-                Replace
+                {messages.forms.replace}
               </button>
               <button
                 type="button"
                 onClick={() => handleRemove(idx)}
                 className="rounded-md bg-background/80 px-2 py-1 font-mono text-xs text-destructive shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
               >
-                Remove
+                {messages.forms.remove}
               </button>
             </div>
           </div>
@@ -232,7 +234,9 @@ export function GalleryUpload({ name, defaultValue = [], value, onChange }: Gall
               />
             </svg>
             <span className="font-mono text-[11px] text-muted-foreground">
-              {previews.length === 0 ? "Add image" : `Add (${previews.length}/${MAX_IMAGES})`}
+              {previews.length === 0
+                ? messages.forms.addImage
+                : `${messages.forms.add} (${previews.length}/${MAX_IMAGES})`}
             </span>
           </div>
         )}

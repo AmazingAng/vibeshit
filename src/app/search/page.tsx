@@ -3,12 +3,16 @@ import { getDb } from "@/lib/db";
 import { searchProducts } from "@/lib/queries/products";
 import { ProductCard } from "@/components/product-card";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { formatTemplate, getMessages } from "@/lib/i18n";
+import { getRequestLocale } from "@/lib/i18n-server";
 
 type Props = {
   searchParams: Promise<{ q?: string }>;
 };
 
 export default async function SearchPage({ searchParams }: Props) {
+  const locale = await getRequestLocale();
+  const t = getMessages(locale);
   const { q } = await searchParams;
   const session = await auth();
   const { env } = await getCloudflareContext({ async: true });
@@ -19,12 +23,12 @@ export default async function SearchPage({ searchParams }: Props) {
   return (
     <div>
       <h1 className="font-mono text-sm font-bold text-muted-foreground">
-        {q ? `Search results for "${q}"` : "Search"}
+        {q ? formatTemplate(t.search.resultsFor, { q }) : t.search.title}
       </h1>
 
       {q && results.length === 0 && (
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          No results found for &quot;{q}&quot;
+          {formatTemplate(t.search.noResults, { q })}
         </p>
       )}
 

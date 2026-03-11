@@ -21,9 +21,18 @@ export function ShitButton({
   const [count, setCount] = useState(initialCount);
   const [isPending, startTransition] = useTransition();
 
+  const redirectToSignIn = () => {
+    const callbackUrl = typeof window !== "undefined"
+      ? window.location.pathname + window.location.search
+      : "/";
+    window.location.assign(
+      `/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`
+    );
+  };
+
   const handleClick = () => {
     if (!isAuthenticated) {
-      window.location.href = "/api/auth/signin/github";
+      redirectToSignIn();
       return;
     }
 
@@ -32,9 +41,20 @@ export function ShitButton({
     setCount(voted ? count - 1 : count + 1);
 
     startTransition(async () => {
-      const result = await toggleVote(productId);
-      if (result.error) {
-        // Revert on error
+      try {
+        const result = await toggleVote(productId);
+        if (result.error) {
+          // Session may expire between render and click.
+          if (result.error === "Not authenticated") {
+            redirectToSignIn();
+            return;
+          }
+          // Revert on other recoverable errors.
+          setVoted(voted);
+          setCount(count);
+        }
+      } catch {
+        // Prevent unhandled server action exceptions from surfacing as generic errors.
         setVoted(voted);
         setCount(count);
       }
@@ -43,6 +63,7 @@ export function ShitButton({
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       disabled={isPending}
       className={cn(

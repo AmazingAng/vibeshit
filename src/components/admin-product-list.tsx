@@ -2,6 +2,7 @@
 
 import { updateProductStatus } from "@/lib/actions/product";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/components/i18n-provider";
 
 type Product = {
   id: string;
@@ -14,6 +15,7 @@ type Product = {
 };
 
 export function AdminProductList({ products }: { products: Product[] }) {
+  const { messages } = useI18n();
   const handleStatus = async (productId: string, status: "approved" | "rejected") => {
     await updateProductStatus(productId, status);
   };
@@ -40,7 +42,7 @@ export function AdminProductList({ products }: { products: Product[] }) {
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
-              by {p.userName} &middot; {p.launchDate} &middot; 💩 {p.shitCount}
+              {messages.admin.by} {p.userName} &middot; {p.launchDate} &middot; 💩 {p.shitCount}
             </p>
           </div>
           <div className="flex gap-1">
@@ -49,7 +51,7 @@ export function AdminProductList({ products }: { products: Product[] }) {
                 onClick={() => handleStatus(p.id, "approved")}
                 className="rounded-md border border-border px-2 py-1 font-mono text-[10px] transition-colors hover:bg-muted"
               >
-                Approve
+                {messages.admin.approve}
               </button>
             )}
             {p.status !== "rejected" && (
@@ -57,7 +59,7 @@ export function AdminProductList({ products }: { products: Product[] }) {
                 onClick={() => handleStatus(p.id, "rejected")}
                 className="rounded-md border border-destructive/50 px-2 py-1 font-mono text-[10px] text-destructive transition-colors hover:bg-destructive/10"
               >
-                Reject
+                {messages.admin.reject}
               </button>
             )}
           </div>

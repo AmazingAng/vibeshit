@@ -4,9 +4,12 @@ import { Button } from "@/components/ui/button";
 import { SearchBox } from "@/components/search-box";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { getMessages, type AppLocale } from "@/lib/i18n";
 
-export async function Nav() {
+export async function Nav({ locale }: { locale: AppLocale }) {
   const session = await auth();
+  const t = getMessages(locale);
 
   return (
     <header className="border-b border-border">
@@ -20,27 +23,29 @@ export async function Nav() {
             href="/trending"
             className="font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            Trending
+            {t.common.trending}
           </Link>
         </div>
 
         <div className="flex items-center gap-2">
           <SearchBox />
+          <LanguageSwitcher />
           <ThemeToggle />
           {session?.user ? (
             <>
               <Link href="/submit">
                 <Button size="sm" className="font-mono text-xs">
-                  Submit
+                  {t.common.submit}
                 </Button>
               </Link>
               <UserMenu
+                locale={locale}
                 userUsername={session.user.username ?? session.user.id!}
                 userName={session.user.name ?? null}
                 userImage={session.user.image ?? null}
                 signOutAction={async () => {
                   "use server";
-                  await signOut();
+                  await signOut({ redirectTo: "/" });
                 }}
               />
             </>
@@ -53,7 +58,7 @@ export async function Nav() {
                 }}
               >
                 <Button type="submit" size="sm" className="font-mono text-xs">
-                  Submit
+                  {t.common.submit}
                 </Button>
               </form>
               <form
@@ -63,7 +68,7 @@ export async function Nav() {
                 }}
               >
                 <Button type="submit" variant="outline" size="sm" className="font-mono text-xs">
-                  Sign in
+                  {t.common.signIn}
                 </Button>
               </form>
             </>

@@ -7,12 +7,14 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
+import { getMessages } from "@/lib/i18n";
+import { getRequestLocale } from "@/lib/i18n-server";
 
 type Props = {
   searchParams: Promise<{ date?: string; agent?: string; llm?: string; tag?: string }>;
 };
 
-function formatDate(dateStr: string) {
+function formatDate(dateStr: string, locale: "en" | "zh", labels: { today: string; yesterday: string }) {
   const date = new Date(dateStr + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -20,10 +22,10 @@ function formatDate(dateStr: string) {
   yesterday.setDate(yesterday.getDate() - 1);
 
   const target = new Date(dateStr + "T00:00:00");
-  if (target.getTime() === today.getTime()) return "Today";
-  if (target.getTime() === yesterday.getTime()) return "Yesterday";
+  if (target.getTime() === today.getTime()) return labels.today;
+  if (target.getTime() === yesterday.getTime()) return labels.yesterday;
 
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
     weekday: "long",
     month: "short",
     day: "numeric",
@@ -37,6 +39,8 @@ function getAdjacentDate(dateStr: string, offset: number) {
 }
 
 export default async function Home({ searchParams }: Props) {
+  const locale = await getRequestLocale();
+  const t = getMessages(locale);
   const { date: dateFilter, agent, llm, tag } = await searchParams;
   const session = await auth();
   const { env } = await getCloudflareContext({ async: true });
@@ -60,10 +64,10 @@ export default async function Home({ searchParams }: Props) {
             href={`/?date=${getAdjacentDate(dateFilter!, -1)}`}
             className="rounded-md border border-border px-3 py-1.5 font-mono text-xs transition-colors hover:bg-muted"
           >
-            &larr; Prev
+            {t.home.prev}
           </Link>
           <span className="font-mono text-sm font-bold">
-            {formatDate(dateFilter!)}
+            {formatDate(dateFilter!, locale, { today: t.home.today, yesterday: t.home.yesterday })}
           </span>
           <div className="flex gap-2">
             {dateFilter !== today && (
@@ -71,14 +75,14 @@ export default async function Home({ searchParams }: Props) {
                 href="/"
                 className="rounded-md border border-border px-3 py-1.5 font-mono text-xs transition-colors hover:bg-muted"
               >
-                Today
+                {t.home.today}
               </Link>
             )}
             <Link
               href={`/?date=${getAdjacentDate(dateFilter!, 1)}`}
               className="rounded-md border border-border px-3 py-1.5 font-mono text-xs transition-colors hover:bg-muted"
             >
-              Next &rarr;
+              {t.home.next}
             </Link>
           </div>
         </div>
@@ -94,29 +98,29 @@ export default async function Home({ searchParams }: Props) {
           <img src="/logo-256.png" alt="" className="mx-auto h-20 w-20" />
           <h2 className="mt-6 font-mono text-xl font-bold">
             {hasFilterActive
-              ? "No matching shit"
+              ? t.home.noMatching
               : isFiltered
-                ? "No shit on this day"
-                : "No shit yet"}
+                ? t.home.noOnDay
+                : t.home.noYet}
           </h2>
           <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground">
             {hasFilterActive
-              ? "Try adjusting your filters or clearing them."
+              ? t.home.adjustFilters
               : isFiltered
-                ? "No products were launched on this day."
-                : "Vibeshit is where vibe coders share what they built. Submit your project, tell us which agent & LLM you used, and let the community give it a 💩."}
+                ? t.home.noLaunchOnDay
+                : t.home.intro}
           </p>
           {hasFilterActive ? null : isFiltered ? (
             <Link
               href="/"
               className="mt-6 inline-block rounded-md border border-border px-4 py-2 font-mono text-xs transition-colors hover:bg-muted"
             >
-              Back to today
+              {t.home.backToToday}
             </Link>
           ) : session?.user ? (
             <Link href="/submit" className="mt-6 inline-block">
               <Button size="lg" className="font-mono text-sm">
-                Submit your shit &rarr;
+                {t.home.submitCta}
               </Button>
             </Link>
           ) : (
@@ -128,7 +132,7 @@ export default async function Home({ searchParams }: Props) {
               className="mt-6 inline-block"
             >
               <Button type="submit" size="lg" className="font-mono text-sm">
-                Sign in & submit your shit &rarr;
+                {t.home.signInSubmitCta}
               </Button>
             </form>
           )}
@@ -142,7 +146,7 @@ export default async function Home({ searchParams }: Props) {
                 href={`/?date=${group.date}`}
                 className="font-mono text-sm font-bold text-muted-foreground hover:underline"
               >
-                {formatDate(group.date)}
+                {formatDate(group.date, locale, { today: t.home.today, yesterday: t.home.yesterday })}
               </Link>
             </div>
             <div className="divide-y divide-border">

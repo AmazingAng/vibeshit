@@ -2,10 +2,12 @@ import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/lib/db";
 import { getSOTD, getTodayLiveLeader } from "@/lib/queries/products";
+import { getMessages, type AppLocale } from "@/lib/i18n";
 
-export async function SotdBanner() {
+export async function SotdBanner({ locale }: { locale: AppLocale }) {
   let sotdData;
   let liveLeader;
+  const t = getMessages(locale);
   
   try {
     const { env } = await getCloudflareContext({ async: true });
@@ -41,7 +43,7 @@ export async function SotdBanner() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <span className="sotd-shimmer-text font-mono text-[10px] font-black tracking-widest sm:text-xs">
-                    SHIT OF THE DAY
+                    {t.sotd.shitOfTheDay}
                   </span>
                   <span className="hidden font-mono text-[10px] text-amber-600/60 dark:text-amber-400/60 sm:inline">
                     {sotdData.date}
@@ -81,7 +83,7 @@ export async function SotdBanner() {
               )}
               <div className="min-w-0">
                 <span className="font-mono text-[10px] tracking-wider text-amber-600/80 dark:text-amber-400/60">
-                  TODAY&apos;S LEADER
+                  {t.sotd.todaysLeader}
                 </span>
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-xs font-medium text-amber-800 dark:text-amber-200">

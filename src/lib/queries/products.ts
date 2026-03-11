@@ -1,5 +1,5 @@
 import { desc, eq, sql, and, gte, lt, like, or } from "drizzle-orm";
-import { products, votes, users, comments, sotd } from "@/lib/db/schema";
+import { products, votes, users, comments, sotd, eventLogs } from "@/lib/db/schema";
 import type { Database } from "@/lib/db";
 
 export type ProductWithVote = {
@@ -16,6 +16,8 @@ export type ProductWithVote = {
   agent: string | null;
   llm: string | null;
   tags: string | null;
+  makerName: string | null;
+  makerLink: string | null;
   userId: string;
   launchDate: string;
   shitCount: number;
@@ -37,16 +39,31 @@ export type CommentWithUser = {
   userImage: string | null;
 };
 
-async function getUsersMap(db: Database) {
-  const allUsers = await db
-    .select({ id: users.id, name: users.name, username: users.username, image: users.image })
-    .from(users);
-  const map = new Map<string, { name: string | null; username: string | null; image: string | null }>();
-  for (const u of allUsers) {
-    map.set(u.id, { name: u.name, username: u.username, image: u.image });
-  }
-  return map;
-}
+const productWithUserColumns = {
+  id: products.id,
+  name: products.name,
+  slug: products.slug,
+  tagline: products.tagline,
+  description: products.description,
+  url: products.url,
+  logoUrl: products.logoUrl,
+  bannerUrl: products.bannerUrl,
+  images: products.images,
+  githubUrl: products.githubUrl,
+  agent: products.agent,
+  llm: products.llm,
+  tags: products.tags,
+  makerName: products.makerName,
+  makerLink: products.makerLink,
+  userId: products.userId,
+  launchDate: products.launchDate,
+  shitCount: products.shitCount,
+  status: products.status,
+  createdAt: products.createdAt,
+  userName: users.name,
+  userUsername: users.username,
+  userImage: users.image,
+};
 
 async function getUserVotes(db: Database, userId: string) {
   const rows = await db
@@ -56,54 +73,34 @@ async function getUserVotes(db: Database, userId: string) {
   return new Set(rows.map((v) => v.productId));
 }
 
-function enrichProducts(
-  rawProducts: (typeof products.$inferSelect)[],
-  usersMap: Map<string, { name: string | null; username: string | null; image: string | null }>,
-  userVotes: Set<string>
-): ProductWithVote[] {
-  return rawProducts.map((p) => {
-    const user = usersMap.get(p.userId);
-    return {
-      ...p,
-      hasVoted: userVotes.has(p.id),
-      userName: user?.name ?? null,
-      userUsername: user?.username ?? null,
-      userImage: user?.image ?? null,
-    };
-  });
-}
-
 export async function getProductsByDate(
   db: Database,
   currentUserId?: string,
   dateFilter?: string,
   filters?: { agent?: string; llm?: string; tag?: string }
 ) {
-  let query;
-  if (dateFilter) {
-    query = await db.query.products.findMany({
-      where: and(
-        eq(products.launchDate, dateFilter),
-        eq(products.status, "approved")
-      ),
-      orderBy: [desc(products.shitCount)],
-    });
-  } else {
-    query = await db.query.products.findMany({
-      where: eq(products.status, "approved"),
-      orderBy: [desc(products.launchDate), desc(products.shitCount)],
-    });
-  }
+  const conditions = [eq(products.status, "approved")];
+  if (dateFilter) conditions.push(eq(products.launchDate, dateFilter));
+
+  const rows = await db
+    .select(productWithUserColumns)
+    .from(products)
+    .leftJoin(users, eq(products.userId, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(products.launchDate), desc(products.shitCount));
 
   const filtered = filters
-    ? query.filter((p) => matchesFilters(p, filters))
-    : query;
+    ? rows.filter((p) => matchesFilters(p, filters))
+    : rows;
 
-  const usersMap = await getUsersMap(db);
   const userVotes = currentUserId
     ? await getUserVotes(db, currentUserId)
     : new Set<string>();
-  const enriched = enrichProducts(filtered, usersMap, userVotes);
+
+  const enriched = filtered.map((p) => ({
+    ...p,
+    hasVoted: userVotes.has(p.id),
+  }));
 
   const grouped = new Map<string, ProductWithVote[]>();
   for (const p of enriched) {
@@ -157,8 +154,10 @@ export async function getProductBySlug(
 
 export async function getCommentsByProductId(
   db: Database,
-  productId: string
-): Promise<CommentWithUser[]> {
+  productId: string,
+  limit: number = 20,
+  offset: number = 0,
+): Promise<{ comments: CommentWithUser[]; hasMore: boolean }> {
   const rows = await db
     .select({
       id: comments.id,
@@ -172,9 +171,15 @@ export async function getCommentsByProductId(
     .from(comments)
     .leftJoin(users, eq(comments.userId, users.id))
     .where(eq(comments.productId, productId))
-    .orderBy(comments.createdAt);
+    .orderBy(comments.createdAt)
+    .limit(limit + 1)
+    .offset(offset);
 
-  return rows;
+  const hasMore = rows.length > limit;
+  return {
+    comments: hasMore ? rows.slice(0, limit) : rows,
+    hasMore,
+  };
 }
 
 export async function getProductsByUser(
@@ -190,16 +195,17 @@ export async function getProductsByUser(
 
   if (!user[0]) return [];
 
-  const rawProducts = await db.query.products.findMany({
-    where: eq(products.userId, user[0].id),
-    orderBy: [desc(products.createdAt)],
-  });
+  const rows = await db
+    .select(productWithUserColumns)
+    .from(products)
+    .leftJoin(users, eq(products.userId, users.id))
+    .where(eq(products.userId, user[0].id))
+    .orderBy(desc(products.createdAt));
 
-  const usersMap = await getUsersMap(db);
   const userVotes = currentUserId
     ? await getUserVotes(db, currentUserId)
     : new Set<string>();
-  return enrichProducts(rawProducts, usersMap, userVotes);
+  return rows.map((p) => ({ ...p, hasVoted: userVotes.has(p.id) }));
 }
 
 export async function getVotedProducts(
@@ -223,19 +229,20 @@ export async function getVotedProducts(
   if (votedRows.length === 0) return [];
 
   const productIds = votedRows.map((v) => v.productId);
-  const rawProducts = await db.query.products.findMany({
-    where: sql`${products.id} IN (${sql.join(
+  const rows = await db
+    .select(productWithUserColumns)
+    .from(products)
+    .leftJoin(users, eq(products.userId, users.id))
+    .where(sql`${products.id} IN (${sql.join(
       productIds.map((id) => sql`${id}`),
       sql`, `
-    )})`,
-    orderBy: [desc(products.shitCount)],
-  });
+    )})`)
+    .orderBy(desc(products.shitCount));
 
-  const usersMap = await getUsersMap(db);
   const userVotes = currentUserId
     ? await getUserVotes(db, currentUserId)
     : new Set<string>();
-  return enrichProducts(rawProducts, usersMap, userVotes);
+  return rows.map((p) => ({ ...p, hasVoted: userVotes.has(p.id) }));
 }
 
 export async function getUserByUsername(db: Database, username: string) {
@@ -268,20 +275,21 @@ export async function searchProducts(
   currentUserId?: string
 ) {
   const q = `%${query}%`;
-  const rawProducts = await db.query.products.findMany({
-    where: and(
+  const rows = await db
+    .select(productWithUserColumns)
+    .from(products)
+    .leftJoin(users, eq(products.userId, users.id))
+    .where(and(
       eq(products.status, "approved"),
       or(like(products.name, q), like(products.tagline, q))
-    ),
-    orderBy: [desc(products.shitCount)],
-    limit: 50,
-  });
+    ))
+    .orderBy(desc(products.shitCount))
+    .limit(50);
 
-  const usersMap = await getUsersMap(db);
   const userVotes = currentUserId
     ? await getUserVotes(db, currentUserId)
     : new Set<string>();
-  return enrichProducts(rawProducts, usersMap, userVotes);
+  return rows.map((p) => ({ ...p, hasVoted: userVotes.has(p.id) }));
 }
 
 export async function getTrendingProducts(
@@ -291,44 +299,34 @@ export async function getTrendingProducts(
   filters?: { agent?: string; llm?: string; tag?: string }
 ) {
   const now = new Date();
-  let dateFrom: string | null = null;
+  const conditions = [eq(products.status, "approved")];
+
   if (period === "week") {
     const d = new Date(now);
     d.setDate(d.getDate() - 7);
-    dateFrom = d.toISOString().split("T")[0];
+    conditions.push(gte(products.launchDate, d.toISOString().split("T")[0]));
   } else if (period === "month") {
     const d = new Date(now);
     d.setMonth(d.getMonth() - 1);
-    dateFrom = d.toISOString().split("T")[0];
+    conditions.push(gte(products.launchDate, d.toISOString().split("T")[0]));
   }
 
-  let rawProducts;
-  if (dateFrom) {
-    rawProducts = await db.query.products.findMany({
-      where: and(
-        eq(products.status, "approved"),
-        gte(products.launchDate, dateFrom)
-      ),
-      orderBy: [desc(products.shitCount)],
-      limit: 50,
-    });
-  } else {
-    rawProducts = await db.query.products.findMany({
-      where: eq(products.status, "approved"),
-      orderBy: [desc(products.shitCount)],
-      limit: 50,
-    });
-  }
+  const rows = await db
+    .select(productWithUserColumns)
+    .from(products)
+    .leftJoin(users, eq(products.userId, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(products.shitCount))
+    .limit(50);
 
   const filtered = filters
-    ? rawProducts.filter((p) => matchesFilters(p, filters))
-    : rawProducts;
+    ? rows.filter((p) => matchesFilters(p, filters))
+    : rows;
 
-  const usersMap = await getUsersMap(db);
   const userVotes = currentUserId
     ? await getUserVotes(db, currentUserId)
     : new Set<string>();
-  return enrichProducts(filtered, usersMap, userVotes);
+  return filtered.map((p) => ({ ...p, hasVoted: userVotes.has(p.id) }));
 }
 
 export async function getAllProducts(db: Database) {
@@ -575,4 +573,68 @@ export async function getTodayLiveLeader(db: Database): Promise<{
     productLogoUrl: product[0].logoUrl,
     voteCount: results[0].voteCount,
   };
+}
+
+// ============ Admin Dashboard ============
+
+export type EventLog = {
+  id: string;
+  type: string;
+  level: string;
+  message: string;
+  metadata: string | null;
+  userId: string | null;
+  createdAt: string;
+};
+
+export type DashboardStats = {
+  totalProducts: number;
+  totalUsers: number;
+  totalVotes: number;
+  totalComments: number;
+  todaySubmissions: number;
+  todayVotes: number;
+};
+
+export async function getDashboardStats(db: Database): Promise<DashboardStats> {
+  const today = new Date().toISOString().split("T")[0];
+
+  const [productCount, userCount, voteCount, commentCount, todaySubs, todayVotes] =
+    await Promise.all([
+      db.select({ count: sql<number>`COUNT(*)` }).from(products),
+      db.select({ count: sql<number>`COUNT(*)` }).from(users),
+      db.select({ count: sql<number>`COUNT(*)` }).from(votes),
+      db.select({ count: sql<number>`COUNT(*)` }).from(comments),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(products)
+        .where(eq(products.launchDate, today)),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(votes)
+        .where(gte(votes.createdAt, `${today}T00:00:00.000Z`)),
+    ]);
+
+  return {
+    totalProducts: productCount[0].count,
+    totalUsers: userCount[0].count,
+    totalVotes: voteCount[0].count,
+    totalComments: commentCount[0].count,
+    todaySubmissions: todaySubs[0].count,
+    todayVotes: todayVotes[0].count,
+  };
+}
+
+export async function getRecentLogs(
+  db: Database,
+  limit: number = 50,
+  levelFilter?: string
+): Promise<EventLog[]> {
+  const conditions = levelFilter ? [eq(eventLogs.level, levelFilter)] : [];
+  return db
+    .select()
+    .from(eventLogs)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(eventLogs.createdAt))
+    .limit(limit);
 }

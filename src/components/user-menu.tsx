@@ -3,17 +3,20 @@
 import { useState, useRef, useCallback } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
+import { getMessages, type AppLocale } from "@/lib/i18n";
 
 interface UserMenuProps {
+  locale: AppLocale;
   userUsername: string;
   userName: string | null;
   userImage: string | null;
   signOutAction: () => Promise<void>;
 }
 
-export function UserMenu({ userUsername, userName, userImage, signOutAction }: UserMenuProps) {
+export function UserMenu({ locale, userUsername, userName, userImage, signOutAction }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+  const t = getMessages(locale);
 
   const handleEnter = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -49,7 +52,7 @@ export function UserMenu({ userUsername, userName, userImage, signOutAction }: U
             className="block w-full rounded-sm px-3 py-1.5 font-mono text-xs text-popover-foreground transition-colors hover:bg-accent"
             onClick={() => setOpen(false)}
           >
-            Profile
+            {t.common.profile}
           </Link>
           <div className="my-1 h-px bg-border" />
           <form action={signOutAction}>
@@ -57,7 +60,7 @@ export function UserMenu({ userUsername, userName, userImage, signOutAction }: U
               type="submit"
               className="w-full cursor-pointer rounded-sm px-3 py-1.5 text-left font-mono text-xs text-destructive transition-colors hover:bg-accent"
             >
-              Log out
+              {t.common.logOut}
             </button>
           </form>
         </div>

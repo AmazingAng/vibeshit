@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Pencil } from "lucide-react";
+import { useI18n } from "@/components/i18n-provider";
 
 type SocialProfile = {
   bio: string | null;
@@ -25,6 +26,7 @@ type SocialProfile = {
 };
 
 export function UserProfileEditor({ initial }: { initial: SocialProfile }) {
+  const { messages } = useI18n();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -63,7 +65,7 @@ export function UserProfileEditor({ initial }: { initial: SocialProfile }) {
       setOpen(false);
       window.location.reload();
     } catch {
-      alert("保存失败，请重试");
+      alert(messages.profileEditor.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -74,19 +76,19 @@ export function UserProfileEditor({ initial }: { initial: SocialProfile }) {
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="gap-1.5">
           <Pencil className="h-3.5 w-3.5" />
-          Edit Profile
+          {messages.profileEditor.editProfile}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit Profile</DialogTitle>
+          <DialogTitle>{messages.profileEditor.editProfile}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label htmlFor="bio">Bio</Label>
+            <Label htmlFor="bio">{messages.profileEditor.bio}</Label>
             <Textarea
               id="bio"
-              placeholder="Tell us about yourself..."
+              placeholder={messages.profileEditor.bioPlaceholder}
               maxLength={200}
               rows={3}
               value={form.bio}
@@ -96,28 +98,28 @@ export function UserProfileEditor({ initial }: { initial: SocialProfile }) {
 
           {/* Twitter — always public */}
           <div className="space-y-1.5">
-            <Label htmlFor="twitter">Twitter / X</Label>
+            <Label htmlFor="twitter">{messages.profileEditor.twitter}</Label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">@</span>
               <Input
                 id="twitter"
-                placeholder="username"
+                placeholder={messages.profileEditor.usernamePlaceholder}
                 maxLength={100}
                 value={form.twitterHandle}
                 onChange={(e) => setStr("twitterHandle", e.target.value)}
               />
             </div>
-            <p className="text-xs text-muted-foreground">Always public</p>
+            <p className="text-xs text-muted-foreground">{messages.profileEditor.alwaysPublic}</p>
           </div>
 
           {/* Telegram — opt-in visibility */}
           <div className="space-y-1.5">
-            <Label htmlFor="telegram">Telegram</Label>
+            <Label htmlFor="telegram">{messages.profileEditor.telegram}</Label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">@</span>
               <Input
                 id="telegram"
-                placeholder="username"
+                placeholder={messages.profileEditor.usernamePlaceholder}
                 maxLength={100}
                 value={form.telegram}
                 onChange={(e) => setStr("telegram", e.target.value)}
@@ -130,17 +132,17 @@ export function UserProfileEditor({ initial }: { initial: SocialProfile }) {
                 onCheckedChange={(v) => setBool("showTelegram", Boolean(v))}
               />
               <label htmlFor="showTelegram" className="text-xs text-muted-foreground cursor-pointer">
-                Show on profile (off by default for privacy)
+                {messages.profileEditor.showOnProfile}
               </label>
             </div>
           </div>
 
           {/* WeChat — opt-in visibility */}
           <div className="space-y-1.5">
-            <Label htmlFor="wechat">WeChat</Label>
+            <Label htmlFor="wechat">{messages.profileEditor.wechat}</Label>
             <Input
               id="wechat"
-              placeholder="WeChat ID"
+              placeholder={messages.profileEditor.wechatPlaceholder}
               maxLength={100}
               value={form.wechat}
               onChange={(e) => setStr("wechat", e.target.value)}
@@ -152,17 +154,17 @@ export function UserProfileEditor({ initial }: { initial: SocialProfile }) {
                 onCheckedChange={(v) => setBool("showWechat", Boolean(v))}
               />
               <label htmlFor="showWechat" className="text-xs text-muted-foreground cursor-pointer">
-                Show on profile (off by default for privacy)
+                {messages.profileEditor.showOnProfile}
               </label>
             </div>
           </div>
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+            {messages.profileEditor.cancel}
           </Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
+            {saving ? messages.forms.saving : messages.profileEditor.save}
           </Button>
         </div>
       </DialogContent>

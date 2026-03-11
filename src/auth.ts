@@ -9,8 +9,27 @@ import { eq } from "drizzle-orm";
 export const { handlers, signIn, signOut, auth } = NextAuth(async () => {
   const { env } = await getCloudflareContext({ async: true });
   const db = getDb(env.DB);
+  const runtimeEnv = env as unknown as Record<string, string | undefined>;
+  const githubClientId = runtimeEnv.GITHUB_CLIENT_ID ?? process.env.GITHUB_CLIENT_ID;
+  const githubClientSecret =
+    runtimeEnv.GITHUB_CLIENT_SECRET ?? process.env.GITHUB_CLIENT_SECRET;
+  const authSecret = runtimeEnv.AUTH_SECRET ?? process.env.AUTH_SECRET;
+  const authUrl = runtimeEnv.AUTH_URL ?? process.env.AUTH_URL;
+  const nodeEnv = runtimeEnv.NODE_ENV ?? process.env.NODE_ENV;
+  const authTrustHostRaw =
+    runtimeEnv.AUTH_TRUST_HOST ?? process.env.AUTH_TRUST_HOST ?? "true";
+  const trustHost =
+    authTrustHostRaw === "true" ||
+    authTrustHostRaw === "1" ||
+    authTrustHostRaw.toLowerCase() === "yes";
+  const canonicalAuthOrigin =
+    authUrl?.replace(/\/$/, "") ??
+    (nodeEnv === "production" ? "https://vibeshit.org" : "http://localhost:3000");
+  const githubCallbackUrl = `${canonicalAuthOrigin}/api/auth/callback/github`;
 
   return {
+    secret: authSecret,
+    trustHost,
     adapter: DrizzleAdapter(db, {
       usersTable: users,
       accountsTable: accounts,
@@ -19,8 +38,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth(async () => {
     }),
     providers: [
       GitHub({
-        clientId: process.env.GITHUB_CLIENT_ID!,
-        clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+        clientId: githubClientId ?? "",
+        clientSecret: githubClientSecret ?? "",
+        authorization: {
+          params: {
+            redirect_uri: githubCallbackUrl,
+          },
+        },
         profile(profile) {
           return {
             id: profile.id.toString(),
@@ -33,7 +57,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth(async () => {
       }),
     ],
     pages: {
-      signIn: "/",
+      signIn: "/signin",
     },
     callbacks: {
       async signIn({ user, profile }) {

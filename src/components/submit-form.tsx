@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ImageUpload } from "@/components/image-upload";
 import { GalleryUpload } from "@/components/gallery-upload";
 import { toast } from "sonner";
+import { useI18n } from "@/components/i18n-provider";
 
 type SubmitDraft = {
   name: string;
@@ -21,6 +22,9 @@ type SubmitDraft = {
   llm: string;
   tags: string;
   githubUrl: string;
+  sharingOthers: boolean;
+  makerName: string;
+  makerLink: string;
 };
 
 const DRAFT_KEY = "vibeshit.submit.draft.v1";
@@ -37,6 +41,9 @@ const emptyDraft: SubmitDraft = {
   llm: "",
   tags: "",
   githubUrl: "",
+  sharingOthers: false,
+  makerName: "",
+  makerLink: "",
 };
 
 export function SubmitForm() {
@@ -50,6 +57,7 @@ export function SubmitForm() {
   const [draft, setDraft] = useState<SubmitDraft>(emptyDraft);
   const [frameIdx, setFrameIdx] = useState(0);
   const shouldClearDraftOnUnmountRef = useRef(false);
+  const { messages } = useI18n();
 
   useEffect(() => {
     try {
@@ -103,14 +111,61 @@ export function SubmitForm() {
         shouldClearDraftOnUnmountRef.current = true;
       }}
     >
+      <div className="space-y-4 rounded-lg border border-border p-4">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={draft.sharingOthers}
+            onChange={(e) => setField("sharingOthers", e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span className="font-mono text-xs">{messages.forms.sharingOthersToggle}</span>
+        </label>
+        {draft.sharingOthers && (
+          <div className="space-y-4 pl-6">
+            <div className="space-y-2">
+              <Label htmlFor="makerName" className="font-mono text-xs">
+                {messages.forms.makerName}
+              </Label>
+              <Input
+                id="makerName"
+                name="makerName"
+                placeholder={messages.forms.makerNamePlaceholder}
+                value={draft.makerName}
+                onChange={(e) => setField("makerName", e.target.value)}
+                required
+                maxLength={100}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="makerLink" className="font-mono text-xs">
+                {messages.forms.makerLink}
+              </Label>
+              <Input
+                id="makerLink"
+                name="makerLink"
+                type="url"
+                placeholder={messages.forms.makerLinkPlaceholder}
+                value={draft.makerLink}
+                onChange={(e) => setField("makerLink", e.target.value)}
+                maxLength={200}
+              />
+              <p className="text-xs text-muted-foreground">
+                {messages.forms.makerLinkHint}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="name" className="font-mono text-xs">
-          Name *
+          {messages.forms.name}
         </Label>
         <Input
           id="name"
           name="name"
-          placeholder="My Vibe Project"
+          placeholder={messages.forms.projectNamePlaceholder}
           value={draft.name}
           onChange={(e) => setField("name", e.target.value)}
           required
@@ -120,12 +175,12 @@ export function SubmitForm() {
 
       <div className="space-y-2">
         <Label htmlFor="tagline" className="font-mono text-xs">
-          Tagline *
+          {messages.forms.tagline}
         </Label>
         <Input
           id="tagline"
           name="tagline"
-          placeholder="A one-liner that describes your project"
+          placeholder={messages.forms.taglinePlaceholder}
           value={draft.tagline}
           onChange={(e) => setField("tagline", e.target.value)}
           required
@@ -135,13 +190,13 @@ export function SubmitForm() {
 
       <div className="space-y-2">
         <Label htmlFor="url" className="font-mono text-xs">
-          URL *
+          {messages.forms.url}
         </Label>
         <Input
           id="url"
           name="url"
           type="url"
-          placeholder="https://myproject.com"
+          placeholder={messages.forms.urlPlaceholder}
           value={draft.url}
           onChange={(e) => setField("url", e.target.value)}
           required
@@ -150,12 +205,12 @@ export function SubmitForm() {
 
       <div className="space-y-2">
         <Label htmlFor="description" className="font-mono text-xs">
-          Description *
+          {messages.forms.description}
         </Label>
         <Textarea
           id="description"
           name="description"
-          placeholder="Tell us more about your project..."
+          placeholder={messages.forms.descriptionPlaceholder}
           rows={4}
           value={draft.description}
           onChange={(e) => setField("description", e.target.value)}
@@ -169,8 +224,8 @@ export function SubmitForm() {
         type="logo"
         value={draft.logoUrl}
         onChange={(value) => setField("logoUrl", value)}
-        label="Logo *"
-        hint="Square, max 2MB"
+        label={messages.forms.logo}
+        hint={messages.forms.logoHint}
       />
 
       <GalleryUpload
@@ -182,12 +237,12 @@ export function SubmitForm() {
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="agent" className="font-mono text-xs">
-            Agent *
+            {messages.forms.agent}
           </Label>
           <Input
             id="agent"
             name="agent"
-            placeholder="e.g. Cursor, Claude Code, Lovable"
+            placeholder={messages.forms.agentPlaceholder}
             value={draft.agent}
             onChange={(e) => setField("agent", e.target.value)}
             maxLength={100}
@@ -196,12 +251,12 @@ export function SubmitForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="llm" className="font-mono text-xs">
-            LLM *
+            {messages.forms.llm}
           </Label>
           <Input
             id="llm"
             name="llm"
-            placeholder="e.g. Claude Sonnet 4.5, GPT 5.2"
+            placeholder={messages.forms.llmPlaceholder}
             value={draft.llm}
             onChange={(e) => setField("llm", e.target.value)}
             maxLength={100}
@@ -212,30 +267,30 @@ export function SubmitForm() {
 
       <div className="space-y-2">
         <Label htmlFor="tags" className="font-mono text-xs">
-          Tags
+          {messages.forms.tags}
         </Label>
         <Input
           id="tags"
           name="tags"
-          placeholder="e.g. ai, saas, developer-tools, web3"
+          placeholder={messages.forms.tagsPlaceholder}
           value={draft.tags}
           onChange={(e) => setField("tags", e.target.value)}
           maxLength={500}
         />
         <p className="text-xs text-muted-foreground">
-          Comma-separated tags to categorize your project.
+          {messages.forms.tagsHint}
         </p>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="githubUrl" className="font-mono text-xs">
-          GitHub URL
+          {messages.forms.githubUrl}
         </Label>
         <Input
           id="githubUrl"
           name="githubUrl"
           type="url"
-          placeholder="https://github.com/user/repo"
+          placeholder={messages.forms.githubPlaceholder}
           value={draft.githubUrl}
           onChange={(e) => setField("githubUrl", e.target.value)}
         />
@@ -246,7 +301,9 @@ export function SubmitForm() {
         disabled={isPending}
         className="w-full font-mono"
       >
-        {isPending ? `${BUTTON_FRAMES[frameIdx]} AI Reviewing...` : "💩 Submit Your Shit"}
+        {isPending
+          ? `${BUTTON_FRAMES[frameIdx]} ${messages.submitForm.aiReviewing}`
+          : messages.submitForm.buttonDefault}
       </Button>
     </form>
   );

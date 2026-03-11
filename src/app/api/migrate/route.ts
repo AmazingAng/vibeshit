@@ -16,6 +16,12 @@ const MIGRATIONS = [
   // v0.0.3 - SOTD (Shit of the Day)
   `CREATE TABLE IF NOT EXISTS \`sotd\` (\`id\` text PRIMARY KEY NOT NULL, \`date\` text NOT NULL, \`productId\` text NOT NULL, \`voteCount\` integer DEFAULT 0 NOT NULL, \`createdAt\` text NOT NULL, FOREIGN KEY (\`productId\`) REFERENCES \`products\`(\`id\`) ON DELETE CASCADE)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS \`sotd_date_unique\` ON \`sotd\` (\`date\`)`,
+  // v0.0.7 - Performance indexes
+  `CREATE INDEX IF NOT EXISTS \`products_userId_idx\` ON \`products\` (\`userId\`)`,
+  `CREATE INDEX IF NOT EXISTS \`products_launchDate_idx\` ON \`products\` (\`launchDate\`)`,
+  `CREATE INDEX IF NOT EXISTS \`products_status_idx\` ON \`products\` (\`status\`)`,
+  `CREATE INDEX IF NOT EXISTS \`votes_productId_idx\` ON \`votes\` (\`productId\`)`,
+  `CREATE INDEX IF NOT EXISTS \`comments_productId_idx\` ON \`comments\` (\`productId\`)`,
 ];
 
 const ALTER_STATEMENTS = [
@@ -32,6 +38,22 @@ const ALTER_STATEMENTS = [
   { check: "wechat", sql: "ALTER TABLE `users` ADD COLUMN `wechat` text" },
   { check: "twitterHandle", sql: "ALTER TABLE `users` ADD COLUMN `twitterHandle` text" },
   { check: "telegram", sql: "ALTER TABLE `users` ADD COLUMN `telegram` text" },
+  { check: "showWechat", sql: "ALTER TABLE `users` ADD COLUMN `showWechat` integer NOT NULL DEFAULT 0" },
+  { check: "showTelegram", sql: "ALTER TABLE `users` ADD COLUMN `showTelegram` integer NOT NULL DEFAULT 0" },
+  // v0.0.6 - Community invite tracking
+  { check: "wechatInvited", sql: "ALTER TABLE `users` ADD COLUMN `wechatInvited` integer NOT NULL DEFAULT 0" },
+  { check: "telegramInvited", sql: "ALTER TABLE `users` ADD COLUMN `telegramInvited` integer NOT NULL DEFAULT 0" },
+  // v0.0.8 - Maker attribution (share others' projects)
+  { check: "makerName", sql: "ALTER TABLE `products` ADD COLUMN `makerName` text" },
+  { check: "makerLink", sql: "ALTER TABLE `products` ADD COLUMN `makerLink` text" },
+];
+
+const EXTRA_MIGRATIONS = [
+  // v0.0.9 - Event logs for admin dashboard
+  `CREATE TABLE IF NOT EXISTS \`event_logs\` (\`id\` text PRIMARY KEY NOT NULL, \`type\` text NOT NULL, \`level\` text NOT NULL DEFAULT 'info', \`message\` text NOT NULL, \`metadata\` text, \`userId\` text, \`createdAt\` text NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS \`event_logs_type_idx\` ON \`event_logs\` (\`type\`)`,
+  `CREATE INDEX IF NOT EXISTS \`event_logs_level_idx\` ON \`event_logs\` (\`level\`)`,
+  `CREATE INDEX IF NOT EXISTS \`event_logs_createdAt_idx\` ON \`event_logs\` (\`createdAt\`)`,
 ];
 
 export async function GET(request: NextRequest) {
@@ -57,7 +79,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, message: "Migration completed (v0.0.5)" });
+    for (const stmt of EXTRA_MIGRATIONS) {
+      await env.DB.prepare(stmt).run();
+    }
+
+    return NextResponse.json({ success: true, message: "Migration completed (v0.0.9)" });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: String(error) },

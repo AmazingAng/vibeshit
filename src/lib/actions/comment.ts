@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getCommentsByProductId } from "@/lib/queries/products";
 
 const commentSchema = z.object({
   content: z.string().min(1, "Comment cannot be empty").max(2000),
@@ -87,4 +88,10 @@ export async function deleteComment(commentId: string) {
   await db.delete(comments).where(eq(comments.id, commentId));
   revalidatePath(`/`);
   return { success: true };
+}
+
+export async function loadMoreComments(productId: string, offset: number) {
+  const { env } = await getCloudflareContext({ async: true });
+  const db = getDb(env.DB);
+  return getCommentsByProductId(db, productId, 20, offset);
 }

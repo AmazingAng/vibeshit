@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback } from "react";
+import { useI18n } from "@/components/i18n-provider";
 
 interface FilterBarProps {
   agents: string[];
@@ -12,6 +13,7 @@ export function FilterBar({ agents, llms }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { messages } = useI18n();
 
   const currentAgent = searchParams.get("agent") ?? "";
   const currentLlm = searchParams.get("llm") ?? "";
@@ -53,7 +55,7 @@ export function FilterBar({ agents, llms }: FilterBarProps) {
           onChange={(e) => update("agent", e.target.value)}
           className="h-7 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground outline-none transition-colors hover:border-foreground/30 focus:ring-1 focus:ring-ring"
         >
-          <option value="">All Agents</option>
+          <option value="">{messages.common.allAgents}</option>
           {agents.map((a) => (
             <option key={a} value={a}>
               {a}
@@ -68,7 +70,7 @@ export function FilterBar({ agents, llms }: FilterBarProps) {
           onChange={(e) => update("llm", e.target.value)}
           className="h-7 rounded-md border border-border bg-background px-2 font-mono text-xs text-foreground outline-none transition-colors hover:border-foreground/30 focus:ring-1 focus:ring-ring"
         >
-          <option value="">All LLMs</option>
+          <option value="">{messages.common.allLlms}</option>
           {llms.map((l) => (
             <option key={l} value={l}>
               {l}
@@ -91,7 +93,7 @@ export function FilterBar({ agents, llms }: FilterBarProps) {
           onClick={clearAll}
           className="font-mono text-[11px] text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
         >
-          Clear
+          {messages.common.clear}
         </button>
       )}
     </div>

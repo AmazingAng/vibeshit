@@ -8,21 +8,27 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { Twitter, MessageCircle, AtSign, Github } from "lucide-react";
+import { getMessages } from "@/lib/i18n";
+import { getRequestLocale } from "@/lib/i18n-server";
 
 type Props = {
   params: Promise<{ username: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  const t = getMessages(locale);
   const { username } = await params;
   const { env } = await getCloudflareContext({ async: true });
   const db = getDb(env.DB);
   const user = await getUserByUsername(db, username);
-  if (!user) return { title: "User Not Found" };
-  return { title: `${user.name ?? user.username ?? "User"} (@${username}) - Vibe Shit` };
+  if (!user) return { title: t.user.userNotFound };
+  return { title: `${user.name ?? user.username ?? t.user.userDefault} (@${username}) - Vibe Shit` };
 }
 
 export default async function UserPage({ params }: Props) {
+  const locale = await getRequestLocale();
+  const t = getMessages(locale);
   const { username } = await params;
   const session = await auth();
   const { env } = await getCloudflareContext({ async: true });
@@ -53,7 +59,7 @@ export default async function UserPage({ params }: Props) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <h1 className="text-xl font-bold">{user.name ?? "Anonymous"}</h1>
+              <h1 className="text-xl font-bold">{user.name ?? t.user.anonymous}</h1>
               {githubUsername && (
                 <p className="text-sm text-muted-foreground">@{githubUsername}</p>
               )}
@@ -115,7 +121,7 @@ export default async function UserPage({ params }: Props) {
                 <MessageCircle className="h-3.5 w-3.5" />
                 @{telegram}
                 {isOwner && !showTelegram && (
-                  <span className="text-xs text-muted-foreground/50">(only you)</span>
+                  <span className="text-xs text-muted-foreground/50">{t.user.onlyYou}</span>
                 )}
               </a>
             )}
@@ -126,7 +132,7 @@ export default async function UserPage({ params }: Props) {
                 <AtSign className="h-3.5 w-3.5" />
                 {wechat}
                 {isOwner && !showWechat && (
-                  <span className="text-xs text-muted-foreground/50">(only you)</span>
+                  <span className="text-xs text-muted-foreground/50">{t.user.onlyYou}</span>
                 )}
               </span>
             )}
@@ -138,7 +144,7 @@ export default async function UserPage({ params }: Props) {
 
       <section>
         <h2 className="font-mono text-sm font-bold text-muted-foreground">
-          Submitted ({userProducts.length})
+          {t.user.submitted} ({userProducts.length})
         </h2>
         {userProducts.length > 0 ? (
           <div className="divide-y divide-border">
@@ -152,7 +158,7 @@ export default async function UserPage({ params }: Props) {
             ))}
           </div>
         ) : (
-          <p className="mt-4 text-sm text-muted-foreground">No products submitted yet.</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t.user.noSubmitted}</p>
         )}
       </section>
 
@@ -160,7 +166,7 @@ export default async function UserPage({ params }: Props) {
 
       <section>
         <h2 className="font-mono text-sm font-bold text-muted-foreground">
-          Shitted ({votedProducts.length})
+          {t.user.shitted} ({votedProducts.length})
         </h2>
         {votedProducts.length > 0 ? (
           <div className="divide-y divide-border">
@@ -174,7 +180,7 @@ export default async function UserPage({ params }: Props) {
             ))}
           </div>
         ) : (
-          <p className="mt-4 text-sm text-muted-foreground">No shits given yet.</p>
+          <p className="mt-4 text-sm text-muted-foreground">{t.user.noShitted}</p>
         )}
       </section>
     </div>

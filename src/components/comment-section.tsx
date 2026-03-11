@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { addComment, deleteComment } from "@/lib/actions/comment";
+import { addComment, deleteComment, loadMoreComments } from "@/lib/actions/comment";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
+import { useI18n } from "@/components/i18n-provider";
 
 type Comment = {
   id: string;
@@ -19,6 +20,7 @@ type Comment = {
 interface CommentSectionProps {
   productId: string;
   comments: Comment[];
+  initialHasMore: boolean;
   isAuthenticated: boolean;
   currentUserId?: string;
   currentUserUsername?: string | null;
@@ -27,11 +29,15 @@ interface CommentSectionProps {
 export function CommentSection({
   productId,
   comments: initialComments,
+  initialHasMore,
   isAuthenticated,
   currentUserId,
   currentUserUsername,
 }: CommentSectionProps) {
+  const { messages } = useI18n();
   const [comments, setComments] = useState(initialComments);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
@@ -57,17 +63,25 @@ export function CommentSection({
   };
 
   const handleDelete = async (commentId: string) => {
-    if (!confirm("Delete this comment?")) return;
+    if (!confirm(messages.comments.deleteConfirm)) return;
     const result = await deleteComment(commentId);
     if (!result.error) {
       setComments((prev) => prev.filter((c) => c.id !== commentId));
     }
   };
 
+  const handleLoadMore = async () => {
+    setIsLoadingMore(true);
+    const result = await loadMoreComments(productId, comments.length);
+    setComments((prev) => [...prev, ...result.comments]);
+    setHasMore(result.hasMore);
+    setIsLoadingMore(false);
+  };
+
   return (
     <div>
       <h3 className="font-mono text-sm font-bold text-muted-foreground">
-        Comments ({comments.length})
+        {messages.comments.comments} ({comments.length})
       </h3>
 
       {isAuthenticated ? (
@@ -78,7 +92,7 @@ export function CommentSection({
           )}
           <Textarea
             name="content"
-            placeholder="Leave a comment..."
+            placeholder={messages.comments.placeholder}
             rows={3}
             maxLength={2000}
             required
@@ -91,16 +105,16 @@ export function CommentSection({
               disabled={isSubmitting}
               className="font-mono text-xs"
             >
-              {isSubmitting ? "Posting..." : "Post"}
+              {isSubmitting ? messages.comments.posting : messages.comments.post}
             </Button>
           </div>
         </form>
       ) : (
         <p className="mt-4 text-sm text-muted-foreground">
-          <Link href="/api/auth/signin/github" className="underline">
-            Sign in
-          </Link>{" "}
-          to leave a comment.
+          <Link href="/signin" className="underline">
+            {messages.common.signIn}
+          </Link>
+          {messages.comments.signInToComment}
         </p>
       )}
 
@@ -131,7 +145,7 @@ export function CommentSection({
                   </Link>
                 ) : (
                   <span className="text-sm font-medium">
-                    {comment.userName ?? "Anonymous"}
+                    {comment.userName ?? messages.comments.anonymous}
                   </span>
                 )}
                 <span className="text-xs text-muted-foreground">
@@ -142,7 +156,7 @@ export function CommentSection({
                     onClick={() => handleDelete(comment.id)}
                     className="ml-auto text-xs text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
                   >
-                    Delete
+                    {messages.comments.delete}
                   </button>
                 )}
               </div>
@@ -154,7 +168,21 @@ export function CommentSection({
         })}
 
         {comments.length === 0 && (
-          <p className="text-sm text-muted-foreground">No comments yet.</p>
+          <p className="text-sm text-muted-foreground">{messages.comments.noComments}</p>
+        )}
+
+        {hasMore && (
+          <div className="flex justify-center pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className="font-mono text-xs text-muted-foreground"
+            >
+              {isLoadingMore ? messages.comments.loading : messages.comments.loadMore}
+            </Button>
+          </div>
         )}
       </div>
     </div>

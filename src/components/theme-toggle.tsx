@@ -2,9 +2,11 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { useI18n } from "@/components/i18n-provider";
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
+  const { messages } = useI18n();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -14,7 +16,7 @@ export function ThemeToggle() {
     <button
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
       className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-sm transition-colors hover:bg-muted"
-      title="Toggle theme"
+      title={messages.common.toggleTheme}
     >
       {theme === "dark" ? "☀️" : "🌙"}
     </button>

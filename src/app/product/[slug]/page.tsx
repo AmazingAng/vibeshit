@@ -10,18 +10,22 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { getMessages } from "@/lib/i18n";
+import { getRequestLocale } from "@/lib/i18n-server";
 
 type Props = {
   params: Promise<{ slug: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  const t = getMessages(locale);
   const { slug } = await params;
   const { env } = await getCloudflareContext({ async: true });
   const db = getDb(env.DB);
   const product = await getProductBySlug(db, slug);
 
-  if (!product) return { title: "Not Found" };
+  if (!product) return { title: t.product.notFoundTitle };
 
   const ogImage = `https://vibeshit.org/og/${slug}`;
 
@@ -45,6 +49,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProductPage({ params }: Props) {
+  const locale = await getRequestLocale();
+  const t = getMessages(locale);
   const { slug } = await params;
   const session = await auth();
   const { env } = await getCloudflareContext({ async: true });
@@ -53,7 +59,7 @@ export default async function ProductPage({ params }: Props) {
   const product = await getProductBySlug(db, slug, session?.user?.id);
   if (!product) notFound();
 
-  const productComments = await getCommentsByProductId(db, product.id);
+  const { comments: productComments, hasMore: commentsHasMore } = await getCommentsByProductId(db, product.id);
   const isOwner = session?.user?.id === product.userId;
 
   return (
@@ -81,7 +87,7 @@ export default async function ProductPage({ params }: Props) {
               rel="noopener noreferrer"
               className="rounded-md border border-border px-3 py-1.5 font-mono text-xs transition-colors hover:bg-muted"
             >
-              Visit &rarr;
+              {t.product.visit}
             </a>
             {product.githubUrl && (
               <a
@@ -90,7 +96,7 @@ export default async function ProductPage({ params }: Props) {
                 rel="noopener noreferrer"
                 className="rounded-md border border-border px-3 py-1.5 font-mono text-xs transition-colors hover:bg-muted"
               >
-                GitHub
+                {t.common.github}
               </a>
             )}
             <ShareButton
@@ -145,12 +151,12 @@ export default async function ProductPage({ params }: Props) {
         <div className="mt-6 flex flex-wrap items-center gap-2">
           {product.agent && (
             <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 font-mono text-xs">
-              <span className="text-muted-foreground">Agent:</span> {product.agent}
+              <span className="text-muted-foreground">{t.product.agent}</span> {product.agent}
             </span>
           )}
           {product.llm && (
             <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 font-mono text-xs">
-              <span className="text-muted-foreground">LLM:</span> {product.llm}
+              <span className="text-muted-foreground">{t.product.llm}</span> {product.llm}
             </span>
           )}
           {product.tags &&
@@ -186,21 +192,53 @@ export default async function ProductPage({ params }: Props) {
             />
           </Link>
         )}
-        <span>
-          Submitted by{" "}
-          {product.userUsername ? (
-            <Link
-              href={`/user/${product.userUsername}`}
-              className="font-medium text-foreground hover:underline"
-            >
-              @{product.userUsername}
-            </Link>
-          ) : (
-            <span className="font-medium text-foreground">
-              {product.userName ?? "Anonymous"}
-            </span>
-          )}
-        </span>
+        {product.makerName ? (
+          <span>
+            {t.product.madeBy}{" "}
+            {product.makerLink ? (
+              <a
+                href={product.makerLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground hover:underline"
+              >
+                {product.makerName}
+              </a>
+            ) : (
+              <span className="font-medium text-foreground">{product.makerName}</span>
+            )}
+            {" · "}
+            {t.product.sharedBy}{" "}
+            {product.userUsername ? (
+              <Link
+                href={`/user/${product.userUsername}`}
+                className="font-medium text-foreground hover:underline"
+              >
+                @{product.userUsername}
+              </Link>
+            ) : (
+              <span className="font-medium text-foreground">
+                {product.userName ?? t.product.anonymous}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span>
+            {t.product.submittedBy}{" "}
+            {product.userUsername ? (
+              <Link
+                href={`/user/${product.userUsername}`}
+                className="font-medium text-foreground hover:underline"
+              >
+                @{product.userUsername}
+              </Link>
+            ) : (
+              <span className="font-medium text-foreground">
+                {product.userName ?? t.product.anonymous}
+              </span>
+            )}
+          </span>
+        )}
         <span>&middot;</span>
         <span>{new Date(product.createdAt).toLocaleDateString()}</span>
       </div>
@@ -210,6 +248,7 @@ export default async function ProductPage({ params }: Props) {
       <CommentSection
         productId={product.id}
         comments={productComments}
+        initialHasMore={commentsHasMore}
         isAuthenticated={!!session?.user}
         currentUserId={session?.user?.id}
         currentUserUsername={session?.user?.username}

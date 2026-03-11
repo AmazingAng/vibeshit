@@ -6,6 +6,8 @@ import { FilterBar } from "@/components/filter-bar";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { getMessages } from "@/lib/i18n";
+import { getRequestLocale } from "@/lib/i18n-server";
 
 type Props = {
   searchParams: Promise<{ period?: string; agent?: string; llm?: string; tag?: string }>;
@@ -16,6 +18,8 @@ export const metadata = {
 };
 
 export default async function TrendingPage({ searchParams }: Props) {
+  const locale = await getRequestLocale();
+  const t = getMessages(locale);
   const { period: rawPeriod, agent, llm, tag } = await searchParams;
   const period = (rawPeriod === "week" || rawPeriod === "month" || rawPeriod === "all")
     ? rawPeriod
@@ -32,16 +36,16 @@ export default async function TrendingPage({ searchParams }: Props) {
   ]);
 
   const tabs = [
-    { label: "This Week", value: "week" },
-    { label: "This Month", value: "month" },
-    { label: "All Time", value: "all" },
+    { label: t.trending.thisWeek, value: "week" },
+    { label: t.trending.thisMonth, value: "month" },
+    { label: t.trending.allTime, value: "all" },
   ];
 
   return (
     <div>
       <div className="flex items-center justify-between">
         <h1 className="font-mono text-sm font-bold text-muted-foreground">
-          Trending
+          {t.trending.title}
         </h1>
         <div className="flex gap-1">
           {tabs.map((tab) => (
@@ -71,8 +75,8 @@ export default async function TrendingPage({ searchParams }: Props) {
       {products.length === 0 ? (
         <p className="mt-8 text-center text-sm text-muted-foreground">
           {(agent || llm || tag)
-            ? "No products match the current filters."
-            : "No trending products yet."}
+            ? t.trending.noMatch
+            : t.trending.noTrending}
         </p>
       ) : (
         <div className="divide-y divide-border">

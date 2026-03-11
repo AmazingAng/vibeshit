@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { products, votes, comments } from "@/lib/db/schema";
+import { products, votes, comments, users, eventLogs } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { redirect } from "next/navigation";
@@ -10,10 +10,46 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { slugify as translitSlugify } from "transliteration";
 
-const LOW_QUALITY_REJECTION_MESSAGE = "Submission failed: this quality is beneath shit-tier. Please vibe harder and improve your 💩 quality.";
-const AI_REVIEW_MODEL = process.env.AI_REVIEW_MODEL || "gpt-5.3-codex";
-const AI_REVIEW_BASE_URL = process.env.AI_REVIEW_BASE_URL || "http://changme.sbs:8317/v1";
-const AI_REVIEW_API_KEY = process.env.AI_REVIEW_API_KEY || "sk-2fap4Q1fzpvMy0AA";
+import type { Database } from "@/lib/db";
+
+async function logEvent(
+  db: Database,
+  type: string,
+  level: "info" | "warn" | "error",
+  message: string,
+  metadata?: Record<string, unknown>,
+  userId?: string
+) {
+  try {
+    await db.insert(eventLogs).values({
+      type,
+      level,
+      message,
+      metadata: metadata ? JSON.stringify(metadata) : null,
+      userId: userId ?? null,
+    });
+  } catch {
+    // Never let logging break the main flow
+  }
+}
+
+const LOW_QUALITY_REJECTION_MESSAGE = "提交失败，请用力 vibe，提高 💩 的质量。";
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "MiniMax-M2.5";
+const ANTHROPIC_BASE_URL = process.env.ANTHROPIC_BASE_URL || "https://api.minimaxi.com/anthropic";
+const FALLBACK_MODEL = process.env.AI_REVIEW_MODEL || "claude-sonnet-4-20250514";
+const FALLBACK_BASE_URL = process.env.AI_REVIEW_BASE_URL || "https://api.skyapi.org";
+
+function resolveApiKeys(cfEnv: Record<string, unknown>) {
+  return {
+    anthropicApiKey: String(cfEnv.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || ""),
+    openaiApiKey: String(cfEnv.AI_REVIEW_API_KEY || process.env.AI_REVIEW_API_KEY || ""),
+    githubToken: String(cfEnv.GITHUB_TOKEN || process.env.GITHUB_TOKEN || ""),
+  };
+}
+const SUBMIT_GUARD_RESET_MS = 30 * 60 * 1000;
+const SUBMIT_GUARD_BASE_COOLDOWN_MS = 5000;
+const SUBMIT_GUARD_MAX_COOLDOWN_MS = 10 * 60 * 1000;
+let submitGuardTableEnsured = false;
 
 const requiredImageUrlSchema = z.string().trim().refine(
   (val) =>
@@ -51,6 +87,8 @@ const submitSchema = z.object({
   agent: z.string().trim().min(1, "Agent is required").max(100),
   llm: z.string().trim().min(1, "LLM is required").max(100),
   tags: z.string().max(500).optional(),
+  makerName: z.string().trim().max(100).optional(),
+  makerLink: z.union([z.literal(""), z.string().url("Invalid maker link")]).optional(),
 });
 
 type GithubRepoRef = {
@@ -65,6 +103,12 @@ type GithubRepoContext = {
   stars: number;
   description: string | null;
   snippets: Array<{ path: string; content: string }>;
+};
+
+type SubmitGuardState = {
+  strike: number;
+  lastAttemptAt: number;
+  nextAllowedAt: number;
 };
 
 function parseGitHubRepoUrl(input: string): GithubRepoRef | null {
@@ -124,22 +168,22 @@ async function isProjectUrlReachable(url: string): Promise<boolean> {
   }
 }
 
-async function fetchGitHubRepoContext(repo: GithubRepoRef): Promise<GithubRepoContext | null> {
+async function fetchGitHubRepoContext(repo: GithubRepoRef, githubToken?: string): Promise<GithubRepoContext | null> {
+  const ghHeaders: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "vibeshit-quality-check",
+  };
+  if (githubToken) {
+    ghHeaders.Authorization = `Bearer ${githubToken}`;
+  }
+
   const repoRes = await fetchWithTimeout(
     `https://api.github.com/repos/${repo.owner}/${repo.repo}`,
-    {
-      headers: {
-        Accept: "application/vnd.github+json",
-        "User-Agent": "vibeshit-quality-check",
-      },
-    },
+    { headers: ghHeaders },
     8000
   );
 
-  if (repoRes.status === 404) return null;
-  if (!repoRes.ok) {
-    throw new Error(`Failed to access GitHub repo: ${repoRes.status}`);
-  }
+  if (!repoRes.ok) return null;
 
   const repoJson = (await repoRes.json()) as {
     default_branch?: string;
@@ -150,12 +194,7 @@ async function fetchGitHubRepoContext(repo: GithubRepoRef): Promise<GithubRepoCo
 
   const treeRes = await fetchWithTimeout(
     `https://api.github.com/repos/${repo.owner}/${repo.repo}/git/trees/${encodeURIComponent(defaultBranch)}?recursive=1`,
-    {
-      headers: {
-        Accept: "application/vnd.github+json",
-        "User-Agent": "vibeshit-quality-check",
-      },
-    },
+    { headers: ghHeaders },
     10000
   );
 
@@ -181,7 +220,7 @@ async function fetchGitHubRepoContext(repo: GithubRepoRef): Promise<GithubRepoCo
     try {
       const rawRes = await fetchWithTimeout(
         `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${encodeURIComponent(defaultBranch)}/${filePath}`,
-        { headers: { "User-Agent": "vibeshit-quality-check" } },
+        { headers: ghHeaders },
         7000
       );
       if (!rawRes.ok) continue;
@@ -210,11 +249,89 @@ function extractJsonObject(text: string): string | null {
   return match ? match[0] : null;
 }
 
+async function ensureSubmitGuardTable(envDb: D1Database): Promise<void> {
+  if (submitGuardTableEnsured) return;
+  await envDb.exec(`
+    CREATE TABLE IF NOT EXISTS submit_ai_guards (
+      user_id TEXT PRIMARY KEY,
+      strike INTEGER NOT NULL,
+      last_attempt_at INTEGER NOT NULL,
+      next_allowed_at INTEGER NOT NULL
+    );
+  `);
+  submitGuardTableEnsured = true;
+}
+
+async function getSubmitGuardState(envDb: D1Database, userId: string): Promise<SubmitGuardState | null> {
+  const row = await envDb
+    .prepare(
+      `SELECT strike, last_attempt_at as lastAttemptAt, next_allowed_at as nextAllowedAt
+       FROM submit_ai_guards
+       WHERE user_id = ?1
+       LIMIT 1`
+    )
+    .bind(userId)
+    .first<SubmitGuardState>();
+
+  if (!row) return null;
+  return {
+    strike: Math.max(0, Math.floor(row.strike)),
+    lastAttemptAt: Math.max(0, Math.floor(row.lastAttemptAt)),
+    nextAllowedAt: Math.max(0, Math.floor(row.nextAllowedAt)),
+  };
+}
+
+async function upsertSubmitGuardState(
+  envDb: D1Database,
+  userId: string,
+  state: SubmitGuardState
+): Promise<void> {
+  await envDb
+    .prepare(
+      `INSERT INTO submit_ai_guards (user_id, strike, last_attempt_at, next_allowed_at)
+       VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(user_id) DO UPDATE SET
+         strike = excluded.strike,
+         last_attempt_at = excluded.last_attempt_at,
+         next_allowed_at = excluded.next_allowed_at`
+    )
+    .bind(userId, state.strike, state.lastAttemptAt, state.nextAllowedAt)
+    .run();
+}
+
+async function applySubmitCooldownGuard(envDb: D1Database, userId: string): Promise<string | null> {
+  await ensureSubmitGuardTable(envDb);
+
+  const now = Date.now();
+  const prev = await getSubmitGuardState(envDb, userId);
+  if (prev && now < prev.nextAllowedAt) {
+    const waitSeconds = Math.max(1, Math.ceil((prev.nextAllowedAt - now) / 1000));
+    return `💩 拉的太频繁，请 ${waitSeconds} 秒后再试。`;
+  }
+
+  const shouldReset = !prev || now - prev.lastAttemptAt > SUBMIT_GUARD_RESET_MS;
+  const strike = shouldReset ? 1 : Math.min(12, prev.strike + 1);
+  const cooldownMs = Math.min(
+    SUBMIT_GUARD_MAX_COOLDOWN_MS,
+    SUBMIT_GUARD_BASE_COOLDOWN_MS * Math.pow(2, strike - 1)
+  );
+
+  await upsertSubmitGuardState(envDb, userId, {
+    strike,
+    lastAttemptAt: now,
+    nextAllowedAt: now + cooldownMs,
+  });
+
+  return null;
+}
+
 async function runAiQualityCheck(input: {
   description: string;
   projectUrl: string;
   githubContext: GithubRepoContext | null;
-}): Promise<{ reject: boolean }> {
+  anthropicApiKey: string;
+  openaiApiKey: string;
+}): Promise<{ reject: boolean; reason?: string }> {
   const snippetsText = input.githubContext
     ? input.githubContext.snippets
         .map((s) => `FILE: ${s.path}\n${s.content}`)
@@ -222,9 +339,13 @@ async function runAiQualityCheck(input: {
     : "No GitHub repo context provided.";
 
   const userPrompt = [
-    "You are reviewing a project submission for quality gate.",
-    "Reject only when quality is extremely poor, spammy, meaningless, or obviously fake.",
-    "Focus on project description quality and (if provided) repository quality.",
+    "You are reviewing a project submission for a developer community site called Vibe Shit (for vibe coders).",
+    "Be moderate — only REJECT submissions that are truly terrible:",
+    "- Pure gibberish, random characters, or keyboard mashing (e.g. 'asdf', 'qwerty', 'aaaaaa')",
+    "- Completely empty or meaningless descriptions (e.g. 'test', 'hello', single random word)",
+    "- Obvious spam or bot-generated garbage",
+    "APPROVE anything that makes a reasonable attempt to describe a project, even if brief or casual.",
+    "This is a vibe coding community — casual tone is fine. When in doubt, APPROVE.",
     "Respond as strict JSON: {\"reject\": boolean, \"reason\": string}",
     "",
     `Project URL: ${input.projectUrl}`,
@@ -237,53 +358,130 @@ async function runAiQualityCheck(input: {
     snippetsText,
   ].join("\n");
 
-  const aiRes = await fetchWithTimeout(
-    `${AI_REVIEW_BASE_URL}/chat/completions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${AI_REVIEW_API_KEY}`,
+  // Prefer MiniMax Anthropic-format API; fallback to OpenAI-compatible provider.
+  const { anthropicApiKey, openaiApiKey } = input;
+  if (anthropicApiKey) {
+    try {
+    const anthropicRes = await fetchWithTimeout(
+      `${ANTHROPIC_BASE_URL.replace(/\/$/, "")}/v1/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": anthropicApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: ANTHROPIC_MODEL,
+          max_tokens: 40000,
+          temperature: 0.1,
+          system:
+            "You are a moderate quality reviewer for a vibe coding community. Only reject pure gibberish, spam, or completely meaningless submissions. Casual and brief descriptions are fine. When in doubt, approve. Return JSON only: {\"reject\": boolean, \"reason\": string}",
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: userPrompt,
+                },
+              ],
+            },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        model: AI_REVIEW_MODEL,
-        temperature: 0.1,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a strict but fair reviewer. Return JSON only with keys reject(boolean) and reason(string).",
-          },
-          {
-            role: "user",
-            content: userPrompt,
-          },
-        ],
-      }),
-    },
-    15000
-  );
+      30000
+    );
 
-  if (!aiRes.ok) {
-    throw new Error(`AI review request failed: ${aiRes.status}`);
+    if (!anthropicRes.ok) {
+      throw new Error(`Anthropic review request failed: ${anthropicRes.status}`);
+    }
+
+    const anthropicJson = (await anthropicRes.json()) as {
+      content?: Array<{ type?: string; text?: string; thinking?: string }>;
+    };
+    // Extract text from all content blocks (text + thinking)
+    const allText = (anthropicJson.content ?? [])
+      .map((part) => {
+        if (part.type === "text" && typeof part.text === "string") return part.text;
+        if (part.type === "thinking" && typeof part.thinking === "string") return part.thinking;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
+    const jsonStr = extractJsonObject(allText);
+    if (!jsonStr) {
+      // Default to not rejecting if we can't parse the response
+      console.error("[AI Review] Could not parse MiniMax response, allowing submission. Raw:", allText.slice(0, 500));
+      return { reject: false };
+    }
+    const parsed = JSON.parse(jsonStr) as { reject?: boolean; reason?: string };
+    return { reject: parsed.reject === true, reason: parsed.reason };
+    } catch (err) {
+      console.error("[AI Review] MiniMax failed, falling through:", err);
+      // Fall through to OpenAI-compatible fallback.
+    }
   }
 
-  const aiJson = (await aiRes.json()) as {
-    choices?: Array<{ message?: { content?: string | null } }>;
-  };
-  const content = aiJson.choices?.[0]?.message?.content ?? "";
-  const jsonStr = extractJsonObject(content);
-  if (!jsonStr) {
-    throw new Error("AI review returned invalid payload");
+  if (!openaiApiKey) {
+    throw new Error("No AI review API key configured");
   }
-  const parsed = JSON.parse(jsonStr) as { reject?: boolean };
-  return { reject: parsed.reject === true };
+
+  {
+    const fallbackRes = await fetchWithTimeout(
+      `${FALLBACK_BASE_URL.replace(/\/$/, "")}/v1/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": openaiApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: FALLBACK_MODEL,
+          max_tokens: 1024,
+          temperature: 0.1,
+          system:
+            "You are a moderate quality reviewer for a vibe coding community. Only reject pure gibberish, spam, or completely meaningless submissions. Casual and brief descriptions are fine. When in doubt, approve. Return JSON only: {\"reject\": boolean, \"reason\": string}",
+          messages: [
+            {
+              role: "user",
+              content: [{ type: "text", text: userPrompt }],
+            },
+          ],
+        }),
+      },
+      30000
+    );
+
+    if (!fallbackRes.ok) {
+      throw new Error(`Fallback Claude review request failed: ${fallbackRes.status}`);
+    }
+
+    const fallbackJson = (await fallbackRes.json()) as {
+      content?: Array<{ type?: string; text?: string }>;
+    };
+    const fallbackText = (fallbackJson.content ?? [])
+      .filter((part) => part.type === "text" && typeof part.text === "string")
+      .map((part) => part.text ?? "")
+      .join("\n");
+    const jsonStr = extractJsonObject(fallbackText);
+    if (!jsonStr) {
+      console.error("[AI Review] Fallback Claude response unparseable, allowing submission. Raw:", fallbackText.slice(0, 500));
+      return { reject: false };
+    }
+    const parsed = JSON.parse(jsonStr) as { reject?: boolean; reason?: string };
+    return { reject: parsed.reject === true, reason: parsed.reason };
+  }
 }
 
 async function runSubmissionQualityGate(data: {
   description: string;
   url: string;
   githubUrl: string;
+  anthropicApiKey: string;
+  openaiApiKey: string;
+  githubToken: string;
 }): Promise<string | null> {
   const urlRepo = parseGitHubRepoUrl(data.url);
   const githubRepo = data.githubUrl ? parseGitHubRepoUrl(data.githubUrl) : null;
@@ -298,7 +496,7 @@ async function runSubmissionQualityGate(data: {
 
   let githubContext: GithubRepoContext | null = null;
   if (repoToCheck) {
-    githubContext = await fetchGitHubRepoContext(repoToCheck);
+    githubContext = await fetchGitHubRepoContext(repoToCheck, data.githubToken);
     if (!githubContext) {
       return "GitHub repo does not exist or is not publicly accessible.";
     }
@@ -308,6 +506,8 @@ async function runSubmissionQualityGate(data: {
     description: data.description,
     projectUrl: data.url,
     githubContext,
+    anthropicApiKey: data.anthropicApiKey,
+    openaiApiKey: data.openaiApiKey,
   });
 
   if (aiResult.reject) {
@@ -343,6 +543,8 @@ export async function submitProduct(formData: FormData) {
     agent: (formData.get("agent") as string) || "",
     llm: (formData.get("llm") as string) || "",
     tags: (formData.get("tags") as string) || undefined,
+    makerName: (formData.get("makerName") as string) || undefined,
+    makerLink: (formData.get("makerLink") as string) || undefined,
   };
 
   const result = submitSchema.safeParse(raw);
@@ -355,18 +557,39 @@ export async function submitProduct(formData: FormData) {
 
   const data = result.data;
   try {
+    const cooldownError = await applySubmitCooldownGuard(env.DB, session.user.id);
+    if (cooldownError) {
+      return { error: cooldownError };
+    }
+  } catch {
+    // Fail open: guard issues should not block legitimate submissions.
+  }
+
+  const apiKeys = resolveApiKeys(env as unknown as Record<string, unknown>);
+  try {
     const gateError = await runSubmissionQualityGate({
       description: data.description,
       url: data.url,
       githubUrl: data.githubUrl,
+      ...apiKeys,
     });
     if (gateError) {
+      await logEvent(db, "ai_review", "warn", `Submission rejected: ${gateError}`, { url: data.url, name: data.name }, session.user.id);
       return { error: gateError };
     }
-  } catch {
-    return {
-      error: "AI quality check is temporarily unavailable. Please try again later.",
-    };
+    await logEvent(db, "ai_review", "info", "AI review passed", { url: data.url, name: data.name }, session.user.id);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Fail open: if both AI providers are down, let the submission through
+    await logEvent(db, "ai_review", "error", `AI review failed (allowing submission): ${msg}`, { url: data.url, name: data.name }, session.user.id);
+  }
+
+  // Idempotency: reject if same user already submitted a product with the same name
+  const duplicate = await db.query.products.findFirst({
+    where: (p, { eq, and }) => and(eq(p.userId, session.user.id), eq(p.name, data.name)),
+  });
+  if (duplicate) {
+    redirect(`/product/${duplicate.slug}`);
   }
 
   const imageUrls = data.images ?? [];
@@ -398,9 +621,13 @@ export async function submitProduct(formData: FormData) {
     agent: data.agent || null,
     llm: data.llm || null,
     tags: tagsArray.length > 0 ? JSON.stringify(tagsArray) : null,
+    makerName: data.makerName || null,
+    makerLink: data.makerLink || null,
     userId: session.user.id,
     launchDate: today,
   });
+
+  await logEvent(db, "submission", "info", `Product submitted: ${data.name}`, { slug, url: data.url, makerName: data.makerName || null }, session.user.id);
 
   redirect(`/product/${slug}`);
 }
@@ -431,6 +658,8 @@ export async function updateProduct(slug: string, formData: FormData) {
     agent: (formData.get("agent") as string) || "",
     llm: (formData.get("llm") as string) || "",
     tags: (formData.get("tags") as string) || undefined,
+    makerName: (formData.get("makerName") as string) || undefined,
+    makerLink: (formData.get("makerLink") as string) || undefined,
   };
 
   const result = submitSchema.safeParse(raw);
@@ -458,6 +687,8 @@ export async function updateProduct(slug: string, formData: FormData) {
       agent: data.agent || null,
       llm: data.llm || null,
       tags: tagsArray.length > 0 ? JSON.stringify(tagsArray) : null,
+      makerName: data.makerName || null,
+      makerLink: data.makerLink || null,
     })
     .where(eq(products.slug, slug));
 
@@ -501,7 +732,6 @@ export async function updateProductStatus(
   const { env } = await getCloudflareContext({ async: true });
   const db = getDb(env.DB);
 
-  const { users } = await import("@/lib/db/schema");
   const user = await db
     .select({ role: users.role })
     .from(users)
@@ -514,6 +744,35 @@ export async function updateProductStatus(
 
   await db.update(products).set({ status }).where(eq(products.id, productId));
   revalidatePath("/");
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function toggleCommunityInvite(
+  userId: string,
+  platform: "wechat" | "telegram",
+  invited: boolean
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: "Not authenticated" };
+  }
+
+  const { env } = await getCloudflareContext({ async: true });
+  const db = getDb(env.DB);
+
+  const user = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1);
+
+  if (!user[0] || user[0].role !== "admin") {
+    return { error: "Not authorized" };
+  }
+
+  const field = platform === "wechat" ? { wechatInvited: invited } : { telegramInvited: invited };
+  await db.update(users).set(field).where(eq(users.id, userId));
   revalidatePath("/admin");
   return { success: true };
 }
