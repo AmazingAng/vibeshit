@@ -15,6 +15,18 @@ export async function toggleVote(productId: string) {
 
   const { env } = await getCloudflareContext({ async: true });
   const db = getDb(env.DB);
+  const product = await db
+    .select({ id: products.id, status: products.status })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+
+  if (!product[0]) {
+    return { error: "Product not found" };
+  }
+  if (product[0].status !== "approved") {
+    return { error: "Product is not available" };
+  }
 
   const existing = await db
     .select()

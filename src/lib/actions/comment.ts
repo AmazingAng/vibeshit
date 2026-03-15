@@ -2,7 +2,7 @@
 
 import { auth } from "@/auth";
 import { getDb } from "@/lib/db";
-import { comments, users } from "@/lib/db/schema";
+import { comments, products, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { revalidatePath } from "next/cache";
@@ -32,6 +32,18 @@ export async function addComment(formData: FormData) {
 
   const { env } = await getCloudflareContext({ async: true });
   const db = getDb(env.DB);
+  const product = await db
+    .select({ id: products.id, status: products.status })
+    .from(products)
+    .where(eq(products.id, result.data.productId))
+    .limit(1);
+
+  if (!product[0]) {
+    return { error: "Product not found" };
+  }
+  if (product[0].status !== "approved") {
+    return { error: "Product is not available" };
+  }
 
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
@@ -93,5 +105,15 @@ export async function deleteComment(commentId: string) {
 export async function loadMoreComments(productId: string, offset: number) {
   const { env } = await getCloudflareContext({ async: true });
   const db = getDb(env.DB);
+  const product = await db
+    .select({ id: products.id, status: products.status })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+
+  if (!product[0] || product[0].status !== "approved") {
+    return { comments: [], hasMore: false };
+  }
+
   return getCommentsByProductId(db, productId, 20, offset);
 }

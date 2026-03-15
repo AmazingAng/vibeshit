@@ -5,14 +5,15 @@ import { settleSOTD } from "@/lib/queries/products";
 
 export async function GET(request: NextRequest) {
   const secret = request.nextUrl.searchParams.get("secret");
-  const expected = process.env.MIGRATE_SECRET;
+  const { env } = await getCloudflareContext({ async: true });
+  const runtimeEnv = env as unknown as Record<string, string | undefined>;
+  const expected = runtimeEnv.MIGRATE_SECRET ?? process.env.MIGRATE_SECRET;
 
   if (!expected || secret !== expected) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
     // Settle yesterday's SOTD

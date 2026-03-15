@@ -517,6 +517,37 @@ async function runSubmissionQualityGate(data: {
   return null;
 }
 
+const XAPI_ACTION_HOST = "https://action.xapi.to";
+
+async function postTweet(xapiKey: string, text: string, db: Database) {
+  try {
+    const res = await fetchWithTimeout(
+      `${XAPI_ACTION_HOST}/v1/actions/execute`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "XAPI-Key": xapiKey,
+        },
+        body: JSON.stringify({
+          action_id: "x-official.2_tweets",
+          input: { method: "POST", body: { text } },
+        }),
+      },
+      15000
+    );
+    if (!res.ok) {
+      const errText = await res.text();
+      await logEvent(db, "twitter", "error", `Tweet failed: ${res.status} ${errText.slice(0, 200)}`);
+    } else {
+      await logEvent(db, "twitter", "info", `Tweet posted: ${text.slice(0, 100)}`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await logEvent(db, "twitter", "error", `Tweet error: ${msg}`);
+  }
+}
+
 function slugify(text: string): string {
   const slug = translitSlugify(text, {
     lowercase: true,
@@ -628,6 +659,14 @@ export async function submitProduct(formData: FormData) {
   });
 
   await logEvent(db, "submission", "info", `Product submitted: ${data.name}`, { slug, url: data.url, makerName: data.makerName || null }, session.user.id);
+
+  // Tweet about the new submission (fire-and-forget)
+  const xapiKey = String((env as unknown as Record<string, unknown>).XAPI_API_KEY || "");
+  if (xapiKey) {
+    const productUrl = `https://vibeshit.org/product/${slug}`;
+    const tweetText = `🆕 ${data.name} — ${data.tagline}\n\n${data.agent ? `🤖 ${data.agent}` : ""}${data.llm ? ` · ${data.llm}` : ""}\n\n${productUrl}`;
+    postTweet(xapiKey, tweetText, db).catch(() => {});
+  }
 
   redirect(`/product/${slug}`);
 }

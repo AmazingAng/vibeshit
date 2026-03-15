@@ -124,6 +124,9 @@ export async function getProductBySlug(
   });
 
   if (!product) return null;
+  if (product.status !== "approved" && product.userId !== currentUserId) {
+    return null;
+  }
 
   const user = await db
     .select({ name: users.name, username: users.username, image: users.image })
@@ -195,11 +198,16 @@ export async function getProductsByUser(
 
   if (!user[0]) return [];
 
+  const conditions = [eq(products.userId, user[0].id)];
+  if (currentUserId !== user[0].id) {
+    conditions.push(eq(products.status, "approved"));
+  }
+
   const rows = await db
     .select(productWithUserColumns)
     .from(products)
     .leftJoin(users, eq(products.userId, users.id))
-    .where(eq(products.userId, user[0].id))
+    .where(and(...conditions))
     .orderBy(desc(products.createdAt));
 
   const userVotes = currentUserId
@@ -229,14 +237,21 @@ export async function getVotedProducts(
   if (votedRows.length === 0) return [];
 
   const productIds = votedRows.map((v) => v.productId);
+  const conditions = [
+    sql`${products.id} IN (${sql.join(
+      productIds.map((id) => sql`${id}`),
+      sql`, `
+    )})`,
+  ];
+  if (currentUserId !== user[0].id) {
+    conditions.push(eq(products.status, "approved"));
+  }
+
   const rows = await db
     .select(productWithUserColumns)
     .from(products)
     .leftJoin(users, eq(products.userId, users.id))
-    .where(sql`${products.id} IN (${sql.join(
-      productIds.map((id) => sql`${id}`),
-      sql`, `
-    )})`)
+    .where(and(...conditions))
     .orderBy(desc(products.shitCount));
 
   const userVotes = currentUserId
