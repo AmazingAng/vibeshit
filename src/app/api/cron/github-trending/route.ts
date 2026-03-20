@@ -703,7 +703,7 @@ export async function GET(request: NextRequest) {
             if (analysis.agent && analysis.agent !== "Unknown") metaParts.push(`🤖 ${analysis.agent}`);
             if (analysis.llm && analysis.llm !== "Unknown") metaParts.push(`🧠 ${analysis.llm}`);
             const metaLine = metaParts.length > 0 ? `${metaParts.join(" · ")}\n` : "";
-            const tweetText = `${analysis.name} — ${analysis.tagline}\n\n⭐ ${starsStr} stars on GitHub\n${metaLine}\n${productUrl}\n\n#VibeCoding #BuildWithAI`;
+            const tweetText = `🔥 on GitHub\n${analysis.name}\n${analysis.tagline}\n\n⭐ ${starsStr} stars on GitHub\n${metaLine}\n${productUrl}`;
             try {
               await fetchWithTimeout(
                 "https://action.xapi.to/v1/actions/execute",
