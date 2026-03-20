@@ -1,6 +1,6 @@
 export default {
   async scheduled(event, env) {
-    const url = `https://vibeshit.org/api/cron/github-trending?secret=${env.MIGRATE_SECRET}&limit=5`;
+    const url = `https://vibeshit.org/api/cron/github-trending?secret=${env.MIGRATE_SECRET}&limit=30`;
     const res = await fetch(url, {
       headers: { "User-Agent": "vibeshit-cron-worker" },
     });

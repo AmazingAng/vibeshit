@@ -80,17 +80,28 @@ async function fetchWithTimeout(
   }
 }
 
+const TRENDING_LANGUAGES = [
+  "",           // overall trending (no language filter)
+  "python",
+  "typescript",
+  "javascript",
+  "rust",
+  "go",
+  "java",
+  "c++",
+  "swift",
+  "kotlin",
+];
+
 /**
- * Scrape GitHub Trending page to get trending repos.
- * Falls back to GitHub Search API if scraping fails.
+ * Scrape a single GitHub Trending page (optionally filtered by language).
  */
-async function fetchTrendingRepos(
-  githubToken: string
-): Promise<TrendingRepo[]> {
-  // Try scraping the trending page first
+async function fetchTrendingPage(language: string): Promise<TrendingRepo[]> {
+  const langParam = language ? `/${encodeURIComponent(language)}` : "";
+  const url = `https://github.com/trending${langParam}?since=daily`;
   try {
     const res = await fetchWithTimeout(
-      "https://github.com/trending?since=daily",
+      url,
       {
         headers: {
           "User-Agent": "vibeshit-trending-bot",
@@ -101,12 +112,35 @@ async function fetchTrendingRepos(
     );
     if (res.ok) {
       const html = await res.text();
-      const repos = parseTrendingHtml(html);
-      if (repos.length > 0) return repos;
+      return parseTrendingHtml(html);
     }
   } catch {
-    // Fall through to search API
+    // Ignore individual page failures
   }
+  return [];
+}
+
+/**
+ * Scrape GitHub Trending across multiple languages, deduplicate.
+ * Falls back to GitHub Search API if scraping fails entirely.
+ */
+async function fetchTrendingRepos(
+  githubToken: string
+): Promise<TrendingRepo[]> {
+  const seen = new Set<string>();
+  const allRepos: TrendingRepo[] = [];
+
+  for (const lang of TRENDING_LANGUAGES) {
+    const repos = await fetchTrendingPage(lang);
+    for (const repo of repos) {
+      if (!seen.has(repo.fullName)) {
+        seen.add(repo.fullName);
+        allRepos.push(repo);
+      }
+    }
+  }
+
+  if (allRepos.length > 0) return allRepos;
 
   // Fallback: use GitHub Search API for recently created popular repos
   const headers: Record<string, string> = {
