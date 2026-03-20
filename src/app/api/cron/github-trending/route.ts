@@ -590,11 +590,13 @@ export async function GET(request: NextRequest) {
       reason?: string;
     }> = [];
 
-    for (const repo of trendingRepos.slice(0, maxRepos)) {
-      // Stop scanning if we've published enough this run
-      if (published >= maxPublish) break;
+    let processed = 0; // count of newly processed (non-cached) repos
 
-      // Skip if already in cache
+    for (const repo of trendingRepos) {
+      // Stop scanning if we've published enough or processed enough new repos
+      if (published >= maxPublish || processed >= maxRepos) break;
+
+      // Skip if already in cache (does NOT count toward limit)
       const cached = await db
         .select({ id: githubTrendingCache.id })
         .from(githubTrendingCache)
@@ -606,6 +608,8 @@ export async function GET(request: NextRequest) {
         results.push({ repo: repo.fullName, status: "cached" });
         continue;
       }
+
+      processed++;
 
       // Also skip if already published as a product
       const existingProduct = await db.query.products.findFirst({
