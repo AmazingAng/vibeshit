@@ -1,0 +1,11 @@
+{
+	"name": "vibeshit-cron",
+	"main": "worker.js",
+	"compatibility_date": "2025-12-01",
+	"triggers": {
+		"crons": ["7 * * * *"]
+	},
+	"observability": {
+		"enabled": true
+	}
+}
