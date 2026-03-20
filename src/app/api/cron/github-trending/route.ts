@@ -567,6 +567,10 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams.get("limit") ?? "10",
     10
   );
+  const maxPublish = parseInt(
+    request.nextUrl.searchParams.get("maxPublish") ?? "3",
+    10
+  );
 
   try {
     await ensureSystemUser(db);
@@ -587,6 +591,9 @@ export async function GET(request: NextRequest) {
     }> = [];
 
     for (const repo of trendingRepos.slice(0, maxRepos)) {
+      // Stop scanning if we've published enough this run
+      if (published >= maxPublish) break;
+
       // Skip if already in cache
       const cached = await db
         .select({ id: githubTrendingCache.id })
