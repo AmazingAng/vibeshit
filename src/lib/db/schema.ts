@@ -75,6 +75,7 @@ export const products = sqliteTable("products", {
   tags: text("tags"),
   makerName: text("makerName"),
   makerLink: text("makerLink"),
+  source: text("source").notNull().default("manual"),
   userId: text("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -142,6 +143,26 @@ export const comments = sqliteTable("comments", {
     .$defaultFn(() => new Date().toISOString()),
 }, (table) => [
   index("comments_productId_idx").on(table.productId),
+]);
+
+export const githubTrendingCache = sqliteTable("github_trending_cache", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  repoFullName: text("repoFullName").notNull().unique(),
+  repoUrl: text("repoUrl").notNull(),
+  stars: integer("stars").notNull().default(0),
+  description: text("description"),
+  language: text("language"),
+  publishedProductId: text("publishedProductId"),
+  status: text("status").notNull().default("pending"),
+  aiReason: text("aiReason"),
+  fetchedAt: text("fetchedAt")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  index("gtc_status_idx").on(table.status),
+  index("gtc_fetchedAt_idx").on(table.fetchedAt),
 ]);
 
 export const eventLogs = sqliteTable("event_logs", {

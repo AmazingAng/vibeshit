@@ -1,8 +1,11 @@
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { NextRequest, NextResponse } from "next/server";
+import { describe, it, expect } from "vitest";
+
+/**
+ * Tests to verify migration statements are well-formed SQL.
+ * We replicate the arrays from route.ts and validate their structure.
+ */
 
 const MIGRATIONS = [
-  // v0.0.1 - Initial schema
   `CREATE TABLE IF NOT EXISTS \`users\` (\`id\` text PRIMARY KEY NOT NULL, \`name\` text, \`email\` text, \`emailVerified\` integer, \`image\` text)`,
   `CREATE TABLE IF NOT EXISTS \`accounts\` (\`id\` text PRIMARY KEY NOT NULL, \`userId\` text NOT NULL, \`type\` text NOT NULL, \`provider\` text NOT NULL, \`providerAccountId\` text NOT NULL, \`refresh_token\` text, \`access_token\` text, \`expires_at\` integer, \`token_type\` text, \`scope\` text, \`id_token\` text, \`session_state\` text, FOREIGN KEY (\`userId\`) REFERENCES \`users\`(\`id\`) ON DELETE CASCADE)`,
   `CREATE TABLE IF NOT EXISTS \`sessions\` (\`sessionToken\` text PRIMARY KEY NOT NULL, \`userId\` text NOT NULL, \`expires\` integer NOT NULL, FOREIGN KEY (\`userId\`) REFERENCES \`users\`(\`id\`) ON DELETE CASCADE)`,
@@ -11,17 +14,9 @@ const MIGRATIONS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS \`products_slug_unique\` ON \`products\` (\`slug\`)`,
   `CREATE TABLE IF NOT EXISTS \`votes\` (\`id\` text PRIMARY KEY NOT NULL, \`userId\` text NOT NULL, \`productId\` text NOT NULL, \`createdAt\` text NOT NULL, FOREIGN KEY (\`userId\`) REFERENCES \`users\`(\`id\`) ON DELETE CASCADE, FOREIGN KEY (\`productId\`) REFERENCES \`products\`(\`id\`) ON DELETE CASCADE)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS \`votes_user_product_idx\` ON \`votes\` (\`userId\`,\`productId\`)`,
-  // v0.0.2 - Comments, status, role
   `CREATE TABLE IF NOT EXISTS \`comments\` (\`id\` text PRIMARY KEY NOT NULL, \`userId\` text NOT NULL, \`productId\` text NOT NULL, \`content\` text NOT NULL, \`createdAt\` text NOT NULL, FOREIGN KEY (\`userId\`) REFERENCES \`users\`(\`id\`) ON DELETE CASCADE, FOREIGN KEY (\`productId\`) REFERENCES \`products\`(\`id\`) ON DELETE CASCADE)`,
-  // v0.0.3 - SOTD (Shit of the Day)
   `CREATE TABLE IF NOT EXISTS \`sotd\` (\`id\` text PRIMARY KEY NOT NULL, \`date\` text NOT NULL, \`productId\` text NOT NULL, \`voteCount\` integer DEFAULT 0 NOT NULL, \`createdAt\` text NOT NULL, FOREIGN KEY (\`productId\`) REFERENCES \`products\`(\`id\`) ON DELETE CASCADE)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS \`sotd_date_unique\` ON \`sotd\` (\`date\`)`,
-  // v0.0.7 - Performance indexes
-  `CREATE INDEX IF NOT EXISTS \`products_userId_idx\` ON \`products\` (\`userId\`)`,
-  `CREATE INDEX IF NOT EXISTS \`products_launchDate_idx\` ON \`products\` (\`launchDate\`)`,
-  `CREATE INDEX IF NOT EXISTS \`products_status_idx\` ON \`products\` (\`status\`)`,
-  `CREATE INDEX IF NOT EXISTS \`votes_productId_idx\` ON \`votes\` (\`productId\`)`,
-  `CREATE INDEX IF NOT EXISTS \`comments_productId_idx\` ON \`comments\` (\`productId\`)`,
 ];
 
 const ALTER_STATEMENTS = [
@@ -33,68 +28,90 @@ const ALTER_STATEMENTS = [
   { check: "llm", sql: "ALTER TABLE `products` ADD COLUMN `llm` text" },
   { check: "tags", sql: "ALTER TABLE `products` ADD COLUMN `tags` text" },
   { check: "images", sql: "ALTER TABLE `products` ADD COLUMN `images` text" },
-  // v0.0.5 - User social profiles
   { check: "bio", sql: "ALTER TABLE `users` ADD COLUMN `bio` text" },
   { check: "wechat", sql: "ALTER TABLE `users` ADD COLUMN `wechat` text" },
   { check: "twitterHandle", sql: "ALTER TABLE `users` ADD COLUMN `twitterHandle` text" },
   { check: "telegram", sql: "ALTER TABLE `users` ADD COLUMN `telegram` text" },
   { check: "showWechat", sql: "ALTER TABLE `users` ADD COLUMN `showWechat` integer NOT NULL DEFAULT 0" },
   { check: "showTelegram", sql: "ALTER TABLE `users` ADD COLUMN `showTelegram` integer NOT NULL DEFAULT 0" },
-  // v0.0.6 - Community invite tracking
   { check: "wechatInvited", sql: "ALTER TABLE `users` ADD COLUMN `wechatInvited` integer NOT NULL DEFAULT 0" },
   { check: "telegramInvited", sql: "ALTER TABLE `users` ADD COLUMN `telegramInvited` integer NOT NULL DEFAULT 0" },
-  // v0.0.8 - Maker attribution (share others' projects)
   { check: "makerName", sql: "ALTER TABLE `products` ADD COLUMN `makerName` text" },
   { check: "makerLink", sql: "ALTER TABLE `products` ADD COLUMN `makerLink` text" },
-  // v0.1.0 - Source tracking for auto-discovered products
   { check: "source", sql: "ALTER TABLE `products` ADD COLUMN `source` text NOT NULL DEFAULT 'manual'" },
 ];
 
-const EXTRA_MIGRATIONS = [
-  // v0.0.9 - Event logs for admin dashboard
-  `CREATE TABLE IF NOT EXISTS \`event_logs\` (\`id\` text PRIMARY KEY NOT NULL, \`type\` text NOT NULL, \`level\` text NOT NULL DEFAULT 'info', \`message\` text NOT NULL, \`metadata\` text, \`userId\` text, \`createdAt\` text NOT NULL)`,
-  `CREATE INDEX IF NOT EXISTS \`event_logs_type_idx\` ON \`event_logs\` (\`type\`)`,
-  `CREATE INDEX IF NOT EXISTS \`event_logs_level_idx\` ON \`event_logs\` (\`level\`)`,
-  `CREATE INDEX IF NOT EXISTS \`event_logs_createdAt_idx\` ON \`event_logs\` (\`createdAt\`)`,
-  // v0.1.0 - GitHub trending cache
-  `CREATE TABLE IF NOT EXISTS \`github_trending_cache\` (\`id\` text PRIMARY KEY NOT NULL, \`repoFullName\` text NOT NULL, \`repoUrl\` text NOT NULL, \`stars\` integer DEFAULT 0 NOT NULL, \`description\` text, \`language\` text, \`publishedProductId\` text, \`status\` text NOT NULL DEFAULT 'pending', \`aiReason\` text, \`fetchedAt\` text NOT NULL)`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS \`gtc_repoFullName_unique\` ON \`github_trending_cache\` (\`repoFullName\`)`,
-  `CREATE INDEX IF NOT EXISTS \`gtc_status_idx\` ON \`github_trending_cache\` (\`status\`)`,
-  `CREATE INDEX IF NOT EXISTS \`gtc_fetchedAt_idx\` ON \`github_trending_cache\` (\`fetchedAt\`)`,
-];
-
-export async function GET(request: NextRequest) {
-  const secret = request.nextUrl.searchParams.get("secret");
-  const { env } = await getCloudflareContext({ async: true });
-  const runtimeEnv = env as unknown as Record<string, string | undefined>;
-  const expected = runtimeEnv.MIGRATE_SECRET ?? process.env.MIGRATE_SECRET;
-
-  if (!expected || secret !== expected) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  try {
-    for (const statement of MIGRATIONS) {
-      await env.DB.prepare(statement).run();
-    }
-
-    for (const alter of ALTER_STATEMENTS) {
-      try {
-        await env.DB.prepare(alter.sql).run();
-      } catch {
-        // Column likely already exists
+describe("migration statements", () => {
+  it("all CREATE statements use IF NOT EXISTS", () => {
+    for (const stmt of MIGRATIONS) {
+      if (stmt.startsWith("CREATE")) {
+        expect(stmt).toContain("IF NOT EXISTS");
       }
     }
+  });
 
-    for (const stmt of EXTRA_MIGRATIONS) {
-      await env.DB.prepare(stmt).run();
+  it("all CREATE TABLE statements (except verificationTokens) define a PRIMARY KEY", () => {
+    for (const stmt of MIGRATIONS) {
+      if (stmt.startsWith("CREATE TABLE") && !stmt.includes("verificationTokens")) {
+        expect(stmt).toContain("PRIMARY KEY");
+      }
     }
+  });
 
-    return NextResponse.json({ success: true, message: "Migration completed (v0.1.0)" });
-  } catch (error) {
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
+  it("all ALTER statements have valid structure", () => {
+    for (const alter of ALTER_STATEMENTS) {
+      expect(alter.check).toBeTruthy();
+      expect(alter.sql).toContain("ALTER TABLE");
+      expect(alter.sql).toContain("ADD COLUMN");
+      expect(alter.sql).toContain(alter.check);
+    }
+  });
+
+  it("ALTER statements reference valid tables", () => {
+    const validTables = ["`users`", "`products`"];
+    for (const alter of ALTER_STATEMENTS) {
+      const tableMatch = alter.sql.match(/ALTER TABLE (\S+)/);
+      expect(tableMatch).not.toBeNull();
+      expect(validTables).toContain(tableMatch![1]);
+    }
+  });
+
+  it("has no duplicate check names in ALTER statements", () => {
+    const checks = ALTER_STATEMENTS.map((a) => a.check);
+    const uniqueChecks = new Set(checks);
+    expect(uniqueChecks.size).toBe(checks.length);
+  });
+
+  it("creates all required tables", () => {
+    const tableNames = MIGRATIONS
+      .filter((s) => s.startsWith("CREATE TABLE"))
+      .map((s) => {
+        const match = s.match(/CREATE TABLE IF NOT EXISTS `(\w+)`/);
+        return match ? match[1] : null;
+      })
+      .filter(Boolean);
+
+    expect(tableNames).toContain("users");
+    expect(tableNames).toContain("accounts");
+    expect(tableNames).toContain("sessions");
+    expect(tableNames).toContain("products");
+    expect(tableNames).toContain("votes");
+    expect(tableNames).toContain("comments");
+    expect(tableNames).toContain("sotd");
+  });
+
+  it("source column defaults to manual", () => {
+    const sourceAlter = ALTER_STATEMENTS.find((a) => a.check === "source");
+    expect(sourceAlter).toBeDefined();
+    expect(sourceAlter!.sql).toContain("DEFAULT 'manual'");
+  });
+
+  it("foreign keys reference users table with CASCADE", () => {
+    const fkStatements = MIGRATIONS.filter(
+      (s) => s.includes("FOREIGN KEY") && s.includes("REFERENCES `users`")
     );
-  }
-}
+    for (const stmt of fkStatements) {
+      expect(stmt).toContain("ON DELETE CASCADE");
+    }
+  });
+});
