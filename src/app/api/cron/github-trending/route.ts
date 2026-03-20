@@ -692,7 +692,12 @@ export async function GET(request: NextRequest) {
           });
           if (product) {
             const productUrl = `https://vibeshit.org/product/${product.slug}`;
-            const tweetText = `🔥 Trending on GitHub: ${analysis.name} — ${analysis.tagline}\n\n⭐ ${repo.stars} stars\n${analysis.agent !== "Unknown" ? `🤖 ${analysis.agent}` : ""}${analysis.llm !== "Unknown" ? ` · ${analysis.llm}` : ""}\n\n${productUrl}`;
+            const starsStr = repo.stars >= 1000 ? `${(repo.stars / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(repo.stars);
+            const metaParts: string[] = [];
+            if (analysis.agent && analysis.agent !== "Unknown") metaParts.push(`🤖 ${analysis.agent}`);
+            if (analysis.llm && analysis.llm !== "Unknown") metaParts.push(`🧠 ${analysis.llm}`);
+            const metaLine = metaParts.length > 0 ? `${metaParts.join(" · ")}\n` : "";
+            const tweetText = `${analysis.name} — ${analysis.tagline}\n\n⭐ ${starsStr} stars on GitHub\n${metaLine}\n${productUrl}\n\n#VibeCoding #BuildWithAI`;
             try {
               await fetchWithTimeout(
                 "https://action.xapi.to/v1/actions/execute",
