@@ -298,8 +298,8 @@ async function analyzeWithAi(
     '  "name": string,            // a catchy product name (use repo name or improve it)',
     '  "tagline": string,         // one-liner tagline, max 120 chars',
     '  "description": string,     // 1-3 sentence description for the community, max 500 chars',
-    '  "agent": string,           // the AI agent/tool used (e.g. "Cursor", "Claude Code", "v0") or best guess, or "Unknown"',
-    '  "llm": string,             // the LLM used (e.g. "GPT-4", "Claude 3.5", "Gemini") or best guess, or "Unknown"',
+    '  "agent": string,           // max 2 AI agents/tools, comma-separated (e.g. "Cursor", "Cursor, Claude Code"). Use "Unknown" if unclear',
+    '  "llm": string,             // max 2 LLMs, comma-separated (e.g. "GPT-4", "Claude 3.5, GPT-4"). Use "Unknown" if unclear',
     '  "tags": string[],          // 1-5 relevant tags',
     '  "reason": string           // brief explanation of why this is/isn\'t a vibe project',
     "}",
@@ -476,6 +476,12 @@ async function publishProduct(
   const logoUrl = context.ownerAvatarUrl || null;
   const bannerUrl = context.socialPreviewUrl || null;
 
+  // Limit agent and llm to at most 2 entries
+  const trimList = (s: string) =>
+    s.split(/,\s*/).filter(Boolean).slice(0, 2).join(", ");
+  const agent = analysis.agent ? trimList(analysis.agent) : analysis.agent;
+  const llm = analysis.llm ? trimList(analysis.llm) : analysis.llm;
+
   const result = await db
     .insert(products)
     .values({
@@ -488,8 +494,8 @@ async function publishProduct(
       bannerUrl,
       images: bannerUrl ? JSON.stringify([bannerUrl]) : null,
       githubUrl: repo.url,
-      agent: analysis.agent,
-      llm: analysis.llm,
+      agent,
+      llm,
       tags:
         analysis.tags.length > 0 ? JSON.stringify(analysis.tags) : null,
       source: "github-trending",
