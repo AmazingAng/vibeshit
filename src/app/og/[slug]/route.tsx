@@ -158,11 +158,9 @@ export async function GET(
       ? (JSON.parse(product.tags) as string[]).slice(0, 3)
       : [];
 
-    const badges: string[] = [];
-    if (product.agent) badges.push(product.agent);
-    if (product.llm) badges.push(product.llm);
-    tags.forEach((t) => badges.push(`#${t}`));
-    const displayBadges = badges.slice(0, 4);
+    const displayBadges: string[] = [];
+    if (product.agent) displayBadges.push(product.agent);
+    if (product.llm) displayBadges.push(product.llm);
 
     return new ImageResponse(
       (
@@ -305,7 +303,7 @@ export async function GET(
                 marginTop: 6,
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 1, overflow: "hidden", minWidth: 0 }}>
                 {displayBadges.map((b) => (
                   <span
                     key={b}
@@ -316,6 +314,7 @@ export async function GET(
                       borderRadius: 20,
                       fontSize: 17,
                       border: "1px solid #30363d",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {b}
@@ -323,7 +322,7 @@ export async function GET(
                 ))}
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 28, flexShrink: 0 }}>
                 <StatItem
                   icon="💩"
                   label="Shits"
