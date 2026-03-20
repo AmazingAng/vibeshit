@@ -1,4 +1,4 @@
-import { desc, eq, sql, and, gte, lt, like, or } from "drizzle-orm";
+import { desc, eq, sql, and, gte, lt, like, or, isNull, inArray } from "drizzle-orm";
 import { products, votes, users, comments, sotd, eventLogs } from "@/lib/db/schema";
 import type { Database } from "@/lib/db";
 
@@ -34,9 +34,11 @@ export type CommentWithUser = {
   content: string;
   createdAt: string;
   userId: string;
+  parentCommentId: string | null;
   userName: string | null;
   userUsername: string | null;
   userImage: string | null;
+  replies?: CommentWithUser[];
 };
 
 const productWithUserColumns = {
@@ -161,26 +163,61 @@ export async function getCommentsByProductId(
   limit: number = 20,
   offset: number = 0,
 ): Promise<{ comments: CommentWithUser[]; hasMore: boolean }> {
-  const rows = await db
+  // Fetch top-level comments (parentCommentId IS NULL)
+  const topLevel = await db
     .select({
       id: comments.id,
       content: comments.content,
       createdAt: comments.createdAt,
       userId: comments.userId,
+      parentCommentId: comments.parentCommentId,
       userName: users.name,
       userUsername: users.username,
       userImage: users.image,
     })
     .from(comments)
     .leftJoin(users, eq(comments.userId, users.id))
-    .where(eq(comments.productId, productId))
+    .where(and(eq(comments.productId, productId), isNull(comments.parentCommentId)))
     .orderBy(comments.createdAt)
     .limit(limit + 1)
     .offset(offset);
 
-  const hasMore = rows.length > limit;
+  const hasMore = topLevel.length > limit;
+  const topComments = hasMore ? topLevel.slice(0, limit) : topLevel;
+
+  // Batch fetch replies for all top-level comments
+  const topIds = topComments.map((c) => c.id);
+  let repliesMap = new Map<string, CommentWithUser[]>();
+
+  if (topIds.length > 0) {
+    const replies = await db
+      .select({
+        id: comments.id,
+        content: comments.content,
+        createdAt: comments.createdAt,
+        userId: comments.userId,
+        parentCommentId: comments.parentCommentId,
+        userName: users.name,
+        userUsername: users.username,
+        userImage: users.image,
+      })
+      .from(comments)
+      .leftJoin(users, eq(comments.userId, users.id))
+      .where(inArray(comments.parentCommentId, topIds))
+      .orderBy(comments.createdAt);
+
+    for (const reply of replies) {
+      const parentId = reply.parentCommentId!;
+      if (!repliesMap.has(parentId)) repliesMap.set(parentId, []);
+      repliesMap.get(parentId)!.push(reply);
+    }
+  }
+
   return {
-    comments: hasMore ? rows.slice(0, limit) : rows,
+    comments: topComments.map((c) => ({
+      ...c,
+      replies: repliesMap.get(c.id) ?? [],
+    })),
     hasMore,
   };
 }

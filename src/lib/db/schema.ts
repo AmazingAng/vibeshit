@@ -76,6 +76,7 @@ export const products = sqliteTable("products", {
   makerName: text("makerName"),
   makerLink: text("makerLink"),
   source: text("source").notNull().default("manual"),
+  claimedAt: text("claimedAt"),
   userId: text("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -137,13 +138,51 @@ export const comments = sqliteTable("comments", {
   productId: text("productId")
     .notNull()
     .references(() => products.id, { onDelete: "cascade" }),
+  parentCommentId: text("parentCommentId"),
   content: text("content").notNull(),
   createdAt: text("createdAt")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
 }, (table) => [
   index("comments_productId_idx").on(table.productId),
+  index("comments_parentCommentId_idx").on(table.parentCommentId),
 ]);
+
+export const notifications = sqliteTable("notifications", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // "vote" | "comment" | "reply"
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  link: text("link"),
+  read: integer("read", { mode: "boolean" }).notNull().default(false),
+  metadata: text("metadata"),
+  createdAt: text("createdAt")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+}, (table) => [
+  index("notifications_userId_idx").on(table.userId),
+  index("notifications_userId_read_idx").on(table.userId, table.read),
+]);
+
+export const newsletterSubscribers = sqliteTable("newsletter_subscribers", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  email: text("email").notNull().unique(),
+  subscribed: integer("subscribed", { mode: "boolean" }).notNull().default(true),
+  token: text("token")
+    .notNull()
+    .$defaultFn(() => crypto.randomUUID()),
+  createdAt: text("createdAt")
+    .notNull()
+    .$defaultFn(() => new Date().toISOString()),
+  unsubscribedAt: text("unsubscribedAt"),
+});
 
 export const githubTrendingCache = sqliteTable("github_trending_cache", {
   id: text("id")

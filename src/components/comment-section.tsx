@@ -12,9 +12,11 @@ type Comment = {
   content: string;
   createdAt: string;
   userId: string;
+  parentCommentId: string | null;
   userName: string | null;
   userUsername: string | null;
   userImage: string | null;
+  replies?: Comment[];
 };
 
 interface CommentSectionProps {
@@ -40,7 +42,9 @@ export function CommentSection({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const replyFormRef = useRef<HTMLFormElement>(null);
 
   const handleSubmit = async (formData: FormData) => {
     setIsSubmitting(true);
@@ -55,18 +59,44 @@ export function CommentSection({
     }
 
     if (result?.comment) {
-      setComments((prev) => [...prev, result.comment]);
+      const newComment = { ...result.comment, replies: [] };
+      if (newComment.parentCommentId) {
+        // Add reply to parent comment
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === newComment.parentCommentId
+              ? { ...c, replies: [...(c.replies ?? []), newComment] }
+              : c
+          )
+        );
+        setReplyingTo(null);
+        replyFormRef.current?.reset();
+      } else {
+        setComments((prev) => [...prev, newComment]);
+        formRef.current?.reset();
+      }
     }
 
-    formRef.current?.reset();
     setIsSubmitting(false);
   };
 
-  const handleDelete = async (commentId: string) => {
+  const handleDelete = async (commentId: string, parentId?: string | null) => {
     if (!confirm(messages.comments.deleteConfirm)) return;
     const result = await deleteComment(commentId);
     if (!result.error) {
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
+      if (parentId) {
+        // Remove reply from parent
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === parentId
+              ? { ...c, replies: (c.replies ?? []).filter((r) => r.id !== commentId) }
+              : c
+          )
+        );
+      } else {
+        // Remove top-level comment (and its replies)
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+      }
     }
   };
 
@@ -78,10 +108,113 @@ export function CommentSection({
     setIsLoadingMore(false);
   };
 
+  const totalCount = comments.reduce(
+    (sum, c) => sum + 1 + (c.replies?.length ?? 0),
+    0
+  );
+
+  const renderComment = (comment: Comment, isReply: boolean = false) => {
+    const profileHref = comment.userUsername
+      ? `/user/${comment.userUsername}`
+      : "#";
+
+    return (
+      <div key={comment.id} className={`group ${isReply ? "pl-10" : ""}`}>
+        <div className="flex items-center gap-2">
+          {comment.userImage && comment.userUsername && (
+            <Link href={profileHref}>
+              <img
+                src={comment.userImage}
+                alt=""
+                className="h-5 w-5 rounded-full"
+              />
+            </Link>
+          )}
+          {comment.userUsername ? (
+            <Link
+              href={profileHref}
+              className="text-sm font-medium hover:underline"
+            >
+              @{comment.userUsername}
+            </Link>
+          ) : (
+            <span className="text-sm font-medium">
+              {comment.userName ?? messages.comments.anonymous}
+            </span>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {new Date(comment.createdAt).toLocaleDateString()}
+          </span>
+          {!isReply && isAuthenticated && (
+            <button
+              onClick={() =>
+                setReplyingTo(replyingTo === comment.id ? null : comment.id)
+              }
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {messages.comments.reply}
+            </button>
+          )}
+          {currentUserId === comment.userId && (
+            <button
+              onClick={() => handleDelete(comment.id, isReply ? comment.parentCommentId : null)}
+              className="ml-auto text-xs text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+            >
+              {messages.comments.delete}
+            </button>
+          )}
+        </div>
+        <p className="mt-1 whitespace-pre-wrap text-sm pl-7">
+          {comment.content}
+        </p>
+
+        {/* Inline reply form */}
+        {replyingTo === comment.id && (
+          <form
+            ref={replyFormRef}
+            action={handleSubmit}
+            className="mt-3 pl-7"
+          >
+            <input type="hidden" name="productId" value={productId} />
+            <input type="hidden" name="parentCommentId" value={comment.id} />
+            <Textarea
+              name="content"
+              placeholder={messages.comments.replyTo.replace("{user}", comment.userUsername ? `@${comment.userUsername}` : (comment.userName ?? ""))}
+              rows={2}
+              maxLength={2000}
+              required
+              className="resize-none"
+              autoFocus
+            />
+            <div className="mt-2 flex items-center gap-2 justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setReplyingTo(null)}
+                className="font-mono text-xs"
+              >
+                {messages.comments.cancelReply}
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSubmitting}
+                className="font-mono text-xs"
+              >
+                {isSubmitting ? messages.comments.posting : messages.comments.reply}
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div>
       <h3 className="font-mono text-sm font-bold text-muted-foreground">
-        {messages.comments.comments} ({comments.length})
+        {messages.comments.comments} ({totalCount})
       </h3>
 
       {isAuthenticated ? (
@@ -119,53 +252,17 @@ export function CommentSection({
       )}
 
       <div className="mt-6 space-y-4">
-        {comments.map((comment) => {
-          const profileHref = comment.userUsername
-            ? `/user/${comment.userUsername}`
-            : "#";
-
-          return (
-            <div key={comment.id} className="group">
-              <div className="flex items-center gap-2">
-                {comment.userImage && comment.userUsername && (
-                  <Link href={profileHref}>
-                    <img
-                      src={comment.userImage}
-                      alt=""
-                      className="h-5 w-5 rounded-full"
-                    />
-                  </Link>
-                )}
-                {comment.userUsername ? (
-                  <Link
-                    href={profileHref}
-                    className="text-sm font-medium hover:underline"
-                  >
-                    @{comment.userUsername}
-                  </Link>
-                ) : (
-                  <span className="text-sm font-medium">
-                    {comment.userName ?? messages.comments.anonymous}
-                  </span>
-                )}
-                <span className="text-xs text-muted-foreground">
-                  {new Date(comment.createdAt).toLocaleDateString()}
-                </span>
-                {currentUserId === comment.userId && (
-                  <button
-                    onClick={() => handleDelete(comment.id)}
-                    className="ml-auto text-xs text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
-                  >
-                    {messages.comments.delete}
-                  </button>
-                )}
+        {comments.map((comment) => (
+          <div key={comment.id}>
+            {renderComment(comment)}
+            {/* Render replies */}
+            {comment.replies && comment.replies.length > 0 && (
+              <div className="mt-3 space-y-3">
+                {comment.replies.map((reply) => renderComment(reply, true))}
               </div>
-              <p className="mt-1 whitespace-pre-wrap text-sm pl-7">
-                {comment.content}
-              </p>
-            </div>
-          );
-        })}
+            )}
+          </div>
+        ))}
 
         {comments.length === 0 && (
           <p className="text-sm text-muted-foreground">{messages.comments.noComments}</p>

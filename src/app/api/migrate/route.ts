@@ -48,6 +48,10 @@ const ALTER_STATEMENTS = [
   { check: "makerLink", sql: "ALTER TABLE `products` ADD COLUMN `makerLink` text" },
   // v0.1.0 - Source tracking for auto-discovered products
   { check: "source", sql: "ALTER TABLE `products` ADD COLUMN `source` text NOT NULL DEFAULT 'manual'" },
+  // v0.2.0 - Nested comments
+  { check: "parentCommentId", sql: "ALTER TABLE `comments` ADD COLUMN `parentCommentId` text" },
+  // v0.2.0 - Maker claim
+  { check: "claimedAt", sql: "ALTER TABLE `products` ADD COLUMN `claimedAt` text" },
 ];
 
 const EXTRA_MIGRATIONS = [
@@ -61,6 +65,15 @@ const EXTRA_MIGRATIONS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS \`gtc_repoFullName_unique\` ON \`github_trending_cache\` (\`repoFullName\`)`,
   `CREATE INDEX IF NOT EXISTS \`gtc_status_idx\` ON \`github_trending_cache\` (\`status\`)`,
   `CREATE INDEX IF NOT EXISTS \`gtc_fetchedAt_idx\` ON \`github_trending_cache\` (\`fetchedAt\`)`,
+  // v0.2.0 - Nested comments index
+  `CREATE INDEX IF NOT EXISTS \`comments_parentCommentId_idx\` ON \`comments\` (\`parentCommentId\`)`,
+  // v0.2.0 - Notifications
+  `CREATE TABLE IF NOT EXISTS \`notifications\` (\`id\` text PRIMARY KEY NOT NULL, \`userId\` text NOT NULL, \`type\` text NOT NULL, \`title\` text NOT NULL, \`message\` text NOT NULL, \`link\` text, \`read\` integer NOT NULL DEFAULT 0, \`metadata\` text, \`createdAt\` text NOT NULL, FOREIGN KEY (\`userId\`) REFERENCES \`users\`(\`id\`) ON DELETE CASCADE)`,
+  `CREATE INDEX IF NOT EXISTS \`notifications_userId_idx\` ON \`notifications\` (\`userId\`)`,
+  `CREATE INDEX IF NOT EXISTS \`notifications_userId_read_idx\` ON \`notifications\` (\`userId\`, \`read\`)`,
+  // v0.2.0 - Newsletter subscribers
+  `CREATE TABLE IF NOT EXISTS \`newsletter_subscribers\` (\`id\` text PRIMARY KEY NOT NULL, \`email\` text NOT NULL, \`subscribed\` integer NOT NULL DEFAULT 1, \`token\` text NOT NULL, \`createdAt\` text NOT NULL, \`unsubscribedAt\` text)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS \`newsletter_subscribers_email_unique\` ON \`newsletter_subscribers\` (\`email\`)`,
 ];
 
 export async function GET(request: NextRequest) {
@@ -90,7 +103,7 @@ export async function GET(request: NextRequest) {
       await env.DB.prepare(stmt).run();
     }
 
-    return NextResponse.json({ success: true, message: "Migration completed (v0.1.0)" });
+    return NextResponse.json({ success: true, message: "Migration completed (v0.2.0)" });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: String(error) },

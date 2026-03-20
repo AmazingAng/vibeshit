@@ -5,6 +5,7 @@ import { SotdBanner } from "@/components/sotd-banner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { I18nProvider } from "@/components/i18n-provider";
+import { NewsletterForm } from "@/components/newsletter-form";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n-server";
 import "./globals.css";
@@ -69,10 +70,13 @@ function LocaleShell({
         <SotdBanner locale={locale} />
         <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
         <footer className="border-t border-border py-8 text-center text-sm text-muted-foreground">
-          <p className="inline-flex items-center gap-1.5 font-mono">
-            <img src="/logo-256.png" alt="" className="inline h-4 w-4" />
-            {messages.common.footerTagline}
-          </p>
+          <div className="mx-auto max-w-4xl px-4">
+            <NewsletterForm />
+            <p className="mt-6 inline-flex items-center gap-1.5 font-mono">
+              <img src="/logo-256.png" alt="" className="inline h-4 w-4" />
+              {messages.common.footerTagline}
+            </p>
+          </div>
         </footer>
         <Toaster />
       </ThemeProvider>

@@ -5,7 +5,9 @@ import { ShitButton } from "@/components/shit-button";
 import { ShareButton } from "@/components/share-button";
 import { CommentSection } from "@/components/comment-section";
 import { ProductActions } from "@/components/product-actions";
+import { ClaimButton } from "@/components/claim-button";
 import { Separator } from "@/components/ui/separator";
+import { parseGitHubRepoUrl } from "@/lib/github";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -62,6 +64,16 @@ export default async function ProductPage({ params }: Props) {
   const { comments: productComments, hasMore: commentsHasMore } = await getCommentsByProductId(db, product.id);
   const isOwner = session?.user?.id === product.userId;
 
+  // Claim eligibility: github-trending product, not yet claimed, owned by system user
+  const isClaimable = product.source === "github-trending"
+    && product.userId === "system-github-trending"
+    && !product.claimedAt;
+  let canClaim = false;
+  if (isClaimable && session?.user?.username && product.githubUrl) {
+    const repo = parseGitHubRepoUrl(product.githubUrl);
+    canClaim = !!repo && repo.owner.toLowerCase() === session.user.username.toLowerCase();
+  }
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="flex items-start gap-6">
@@ -105,6 +117,9 @@ export default async function ProductPage({ params }: Props) {
               productSlug={slug}
             />
             {isOwner && <ProductActions slug={slug} />}
+            {isClaimable && session?.user && (
+              <ClaimButton productId={product.id} canClaim={canClaim} />
+            )}
           </div>
         </div>
 

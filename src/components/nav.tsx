@@ -5,6 +5,7 @@ import { SearchBox } from "@/components/search-box";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { NotificationBell } from "@/components/notification-bell";
 import { getMessages, type AppLocale } from "@/lib/i18n";
 
 export async function Nav({ locale }: { locale: AppLocale }) {
@@ -33,6 +34,7 @@ export async function Nav({ locale }: { locale: AppLocale }) {
           <ThemeToggle />
           {session?.user ? (
             <>
+              <NotificationBell />
               <Link href="/submit">
                 <Button size="sm" className="font-mono text-xs">
                   {t.common.submit}
