@@ -528,6 +528,8 @@ async function publishProduct(
       bannerUrl,
       images: bannerUrl ? JSON.stringify([bannerUrl]) : null,
       githubUrl: repo.url,
+      makerName: repo.fullName.split("/")[0],
+      makerLink: `https://github.com/${repo.fullName.split("/")[0]}`,
       agent,
       llm,
       tags:
