@@ -153,7 +153,27 @@ export async function GET(
       : { stars: 0, forks: 0, issues: 0 };
 
     const logoUrl = toAbsoluteUrl(product.logoUrl);
-    const avatarUrl = product.userImage;
+
+    // Determine author display: prefer makerName, then GitHub repo owner, fallback to submitter
+    let authorName: string | null = null;
+    let authorAvatar: string | null = null;
+
+    if (product.makerName) {
+      // Explicitly attributed maker
+      authorName = product.makerName;
+      authorAvatar = product.makerLink?.includes("github.com")
+        ? `https://github.com/${product.makerLink.split("github.com/")[1]?.split("/")[0]}.png`
+        : null;
+    } else if (ghInfo && product.source === "github-trending") {
+      // Auto-published from GitHub trending: show repo owner
+      authorName = `@${ghInfo.owner}`;
+      authorAvatar = `https://github.com/${ghInfo.owner}.png`;
+    } else {
+      // Regular submission: show submitter
+      authorName = product.userUsername ? `@${product.userUsername}` : null;
+      authorAvatar = product.userImage;
+    }
+
     const tags = product.tags
       ? (JSON.parse(product.tags) as string[]).slice(0, 3)
       : [];
@@ -220,17 +240,17 @@ export async function GET(
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {avatarUrl && (
+                  {authorAvatar && (
                     <img
-                      src={avatarUrl}
+                      src={authorAvatar}
                       width={36}
                       height={36}
                       style={{ borderRadius: 18 }}
                     />
                   )}
-                  {product.userUsername && (
+                  {authorName && (
                     <span style={{ fontSize: 24, color: "#e6edf3" }}>
-                      @{product.userUsername}
+                      {authorName}
                     </span>
                   )}
                 </div>
