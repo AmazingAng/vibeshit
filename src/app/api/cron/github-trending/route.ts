@@ -5,6 +5,8 @@ import { products, githubTrendingCache, eventLogs, users } from "@/lib/db/schema
 import { eq } from "drizzle-orm";
 import { slugify } from "transliteration";
 import type { Database } from "@/lib/db";
+import { fetchWithTimeout, extractJsonObject } from "@/lib/ai-helpers";
+import { translateForProduct } from "@/lib/translate";
 
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || "MiniMax-M2.5";
 const ANTHROPIC_BASE_URL =
@@ -39,7 +41,9 @@ type AiAnalysis = {
   isVibeProject: boolean;
   name: string;
   tagline: string;
+  taglineZh?: string;
   description: string;
+  descriptionZh?: string;
   agent: string;
   llm: string;
   tags: string[];
@@ -66,19 +70,6 @@ async function logEvent(
   }
 }
 
-async function fetchWithTimeout(
-  input: string,
-  init: RequestInit = {},
-  timeoutMs = 8000
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
 const TRENDING_LANGUAGES = [
   "",           // overall trending (no language filter)
@@ -330,8 +321,10 @@ async function analyzeWithAi(
     "{",
     '  "isVibeProject": boolean,  // true if this is a vibe coding / AI-related project',
     '  "name": string,            // a catchy product name (use repo name or improve it)',
-    '  "tagline": string,         // one-liner tagline, max 120 chars',
-    '  "description": string,     // 1-3 sentence description for the community, max 500 chars',
+    '  "tagline": string,         // one-liner English tagline, max 120 chars',
+    '  "taglineZh": string,       // Chinese translation of the tagline',
+    '  "description": string,     // 1-3 sentence English description for the community, max 500 chars',
+    '  "descriptionZh": string,   // Chinese translation of the description',
     '  "agent": string,           // max 2 AI agents/tools, comma-separated (e.g. "Cursor", "Cursor, Claude Code"). Use "Unknown" if unclear',
     '  "llm": string,             // max 2 LLMs, comma-separated (e.g. "GPT-4", "Claude 3.5, GPT-4"). Use "Unknown" if unclear',
     '  "tags": string[],          // 1-5 relevant tags',
@@ -446,11 +439,6 @@ async function analyzeWithAi(
   return null;
 }
 
-function extractJsonObject(text: string): string | null {
-  const match = text.match(/\{[\s\S]*\}/);
-  return match ? match[0] : null;
-}
-
 function makeSlug(text: string): string {
   const slug = slugify(text, {
     lowercase: true,
@@ -522,7 +510,11 @@ async function publishProduct(
       name: analysis.name,
       slug,
       tagline: analysis.tagline,
+      taglineEn: analysis.tagline,
+      taglineZh: analysis.taglineZh || null,
       description: analysis.description,
+      descriptionEn: analysis.description,
+      descriptionZh: analysis.descriptionZh || null,
       url: projectUrl,
       logoUrl,
       bannerUrl,
@@ -735,6 +727,24 @@ export async function GET(request: NextRequest) {
         published++;
         results.push({ repo: repo.fullName, status: "published" });
 
+        // Backfill translation if AI didn't provide Chinese
+        if (!analysis.taglineZh || !analysis.descriptionZh) {
+          translateForProduct({
+            tagline: analysis.tagline,
+            description: analysis.description,
+            anthropicApiKey,
+            openaiApiKey,
+          }).then(async (tr) => {
+            if (!tr) return;
+            await db.update(products).set({
+              taglineZh: tr.taglineZh,
+              taglineEn: tr.taglineEn,
+              descriptionZh: tr.descriptionZh,
+              descriptionEn: tr.descriptionEn,
+            }).where(eq(products.id, productId));
+          }).catch(() => {});
+        }
+
         // Tweet about it (fire-and-forget)
         const xapiKey = String(
           (env as unknown as Record<string, unknown>).XAPI_API_KEY || ""
@@ -750,7 +760,8 @@ export async function GET(request: NextRequest) {
             if (analysis.agent && analysis.agent !== "Unknown") metaParts.push(`🤖 ${analysis.agent}`);
             if (analysis.llm && analysis.llm !== "Unknown") metaParts.push(`🧠 ${analysis.llm}`);
             const metaLine = metaParts.length > 0 ? `${metaParts.join(" · ")}\n` : "";
-            const tweetText = `🔥 on GitHub\n${analysis.name}\n${analysis.tagline}\n\n⭐ ${starsStr} stars on GitHub\n${metaLine}\n${productUrl}`;
+            const tweetTagline = analysis.taglineZh || analysis.tagline;
+            const tweetText = `🔥 on GitHub\n${analysis.name}\n${tweetTagline}\n\n⭐ ${starsStr} stars on GitHub\n${metaLine}\n${productUrl}`;
             try {
               await fetchWithTimeout(
                 "https://action.xapi.to/v1/actions/execute",

@@ -16,6 +16,10 @@ export type ProductWithVote = {
   agent: string | null;
   llm: string | null;
   tags: string | null;
+  taglineZh: string | null;
+  taglineEn: string | null;
+  descriptionZh: string | null;
+  descriptionEn: string | null;
   makerName: string | null;
   makerLink: string | null;
   userId: string;
@@ -55,6 +59,10 @@ const productWithUserColumns = {
   agent: products.agent,
   llm: products.llm,
   tags: products.tags,
+  taglineZh: products.taglineZh,
+  taglineEn: products.taglineEn,
+  descriptionZh: products.descriptionZh,
+  descriptionEn: products.descriptionEn,
   makerName: products.makerName,
   makerLink: products.makerLink,
   userId: products.userId,
@@ -333,7 +341,12 @@ export async function searchProducts(
     .leftJoin(users, eq(products.userId, users.id))
     .where(and(
       eq(products.status, "approved"),
-      or(like(products.name, q), like(products.tagline, q))
+      or(
+        like(products.name, q),
+        like(products.tagline, q),
+        like(products.taglineZh, q),
+        like(products.taglineEn, q)
+      )
     ))
     .orderBy(desc(products.shitCount))
     .limit(50);

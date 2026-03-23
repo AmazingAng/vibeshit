@@ -40,6 +40,7 @@ export default async function SearchPage({ searchParams }: Props) {
               product={product}
               isAuthenticated={!!session?.user}
               rank={idx + 1}
+              locale={locale}
             />
           ))}
         </div>

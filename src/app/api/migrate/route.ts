@@ -52,6 +52,11 @@ const ALTER_STATEMENTS = [
   { check: "parentCommentId", sql: "ALTER TABLE `comments` ADD COLUMN `parentCommentId` text" },
   // v0.2.0 - Maker claim
   { check: "claimedAt", sql: "ALTER TABLE `products` ADD COLUMN `claimedAt` text" },
+  // v0.3.0 - Bilingual tagline/description
+  { check: "taglineZh", sql: "ALTER TABLE `products` ADD COLUMN `taglineZh` text" },
+  { check: "taglineEn", sql: "ALTER TABLE `products` ADD COLUMN `taglineEn` text" },
+  { check: "descriptionZh", sql: "ALTER TABLE `products` ADD COLUMN `descriptionZh` text" },
+  { check: "descriptionEn", sql: "ALTER TABLE `products` ADD COLUMN `descriptionEn` text" },
 ];
 
 const EXTRA_MIGRATIONS = [
@@ -103,7 +108,7 @@ export async function GET(request: NextRequest) {
       await env.DB.prepare(stmt).run();
     }
 
-    return NextResponse.json({ success: true, message: "Migration completed (v0.2.0)" });
+    return NextResponse.json({ success: true, message: "Migration completed (v0.3.0)" });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: String(error) },

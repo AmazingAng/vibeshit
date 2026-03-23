@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { ShitButton } from "./shit-button";
 import type { ProductWithVote } from "@/lib/queries/products";
+import { getLocalizedTagline } from "@/lib/bilingual";
+import type { AppLocale } from "@/lib/i18n";
 
 interface ProductCardProps {
   product: ProductWithVote;
   isAuthenticated: boolean;
   rank: number;
+  locale?: AppLocale;
 }
 
-export function ProductCard({ product, isAuthenticated, rank }: ProductCardProps) {
+export function ProductCard({ product, isAuthenticated, rank, locale = "en" }: ProductCardProps) {
   const parsedTags: string[] = product.tags ? JSON.parse(product.tags) : [];
   const hasAgentOrLlm = product.agent || product.llm;
 
@@ -40,7 +43,7 @@ export function ProductCard({ product, isAuthenticated, rank }: ProductCardProps
               {product.name}
             </h3>
             <p className="truncate text-xs text-muted-foreground sm:text-sm">
-              {product.tagline}
+              {getLocalizedTagline(product, locale)}
             </p>
             {hasAgentOrLlm && (
               <div className="mt-1 flex flex-wrap items-center gap-1">

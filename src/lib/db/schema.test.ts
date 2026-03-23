@@ -50,6 +50,13 @@ describe("database schema", () => {
     expect(schema.products.bannerUrl).toBeDefined();
   });
 
+  it("products table has bilingual fields", () => {
+    expect(schema.products.taglineZh).toBeDefined();
+    expect(schema.products.taglineEn).toBeDefined();
+    expect(schema.products.descriptionZh).toBeDefined();
+    expect(schema.products.descriptionEn).toBeDefined();
+  });
+
   it("votes table has unique constraint on user+product", () => {
     // The uniqueIndex is defined in the schema
     expect(schema.votes.userId).toBeDefined();

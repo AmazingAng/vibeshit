@@ -156,6 +156,7 @@ export default async function Home({ searchParams }: Props) {
                   product={product}
                   isAuthenticated={!!session?.user}
                   rank={idx + 1}
+                  locale={locale}
                 />
               ))}
             </div>

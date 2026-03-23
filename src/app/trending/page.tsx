@@ -86,6 +86,7 @@ export default async function TrendingPage({ searchParams }: Props) {
               product={product}
               isAuthenticated={!!session?.user}
               rank={idx + 1}
+              locale={locale}
             />
           ))}
         </div>

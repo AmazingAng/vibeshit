@@ -154,6 +154,7 @@ export default async function UserPage({ params }: Props) {
                 product={product}
                 isAuthenticated={!!session?.user}
                 rank={idx + 1}
+                locale={locale}
               />
             ))}
           </div>
@@ -176,6 +177,7 @@ export default async function UserPage({ params }: Props) {
                 product={product}
                 isAuthenticated={!!session?.user}
                 rank={idx + 1}
+                locale={locale}
               />
             ))}
           </div>

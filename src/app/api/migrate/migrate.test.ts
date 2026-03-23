@@ -39,6 +39,13 @@ const ALTER_STATEMENTS = [
   { check: "makerName", sql: "ALTER TABLE `products` ADD COLUMN `makerName` text" },
   { check: "makerLink", sql: "ALTER TABLE `products` ADD COLUMN `makerLink` text" },
   { check: "source", sql: "ALTER TABLE `products` ADD COLUMN `source` text NOT NULL DEFAULT 'manual'" },
+  { check: "parentCommentId", sql: "ALTER TABLE `comments` ADD COLUMN `parentCommentId` text" },
+  { check: "claimedAt", sql: "ALTER TABLE `products` ADD COLUMN `claimedAt` text" },
+  // v0.3.0 - Bilingual tagline/description
+  { check: "taglineZh", sql: "ALTER TABLE `products` ADD COLUMN `taglineZh` text" },
+  { check: "taglineEn", sql: "ALTER TABLE `products` ADD COLUMN `taglineEn` text" },
+  { check: "descriptionZh", sql: "ALTER TABLE `products` ADD COLUMN `descriptionZh` text" },
+  { check: "descriptionEn", sql: "ALTER TABLE `products` ADD COLUMN `descriptionEn` text" },
 ];
 
 describe("migration statements", () => {
@@ -68,7 +75,7 @@ describe("migration statements", () => {
   });
 
   it("ALTER statements reference valid tables", () => {
-    const validTables = ["`users`", "`products`"];
+    const validTables = ["`users`", "`products`", "`comments`"];
     for (const alter of ALTER_STATEMENTS) {
       const tableMatch = alter.sql.match(/ALTER TABLE (\S+)/);
       expect(tableMatch).not.toBeNull();
@@ -104,6 +111,19 @@ describe("migration statements", () => {
     const sourceAlter = ALTER_STATEMENTS.find((a) => a.check === "source");
     expect(sourceAlter).toBeDefined();
     expect(sourceAlter!.sql).toContain("DEFAULT 'manual'");
+  });
+
+  it("has bilingual ALTER statements for products table", () => {
+    const bilingualFields = ["taglineZh", "taglineEn", "descriptionZh", "descriptionEn"];
+    for (const field of bilingualFields) {
+      const alter = ALTER_STATEMENTS.find((a) => a.check === field);
+      expect(alter).toBeDefined();
+      expect(alter!.sql).toContain("`products`");
+      expect(alter!.sql).toContain(`\`${field}\``);
+      expect(alter!.sql).toContain("text");
+      // These are nullable (no NOT NULL)
+      expect(alter!.sql).not.toContain("NOT NULL");
+    }
   });
 
   it("foreign keys reference users table with CASCADE", () => {

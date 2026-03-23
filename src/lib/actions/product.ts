@@ -12,6 +12,8 @@ import { slugify as translitSlugify } from "transliteration";
 
 import type { Database } from "@/lib/db";
 import { parseGitHubRepoUrl, type GithubRepoRef } from "@/lib/github";
+import { fetchWithTimeout, extractJsonObject } from "@/lib/ai-helpers";
+import { translateAndUpdate } from "@/lib/translate";
 
 async function logEvent(
   db: Database,
@@ -106,19 +108,6 @@ type SubmitGuardState = {
   nextAllowedAt: number;
 };
 
-async function fetchWithTimeout(
-  input: string,
-  init: RequestInit = {},
-  timeoutMs = 8000
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
 async function isProjectUrlReachable(url: string): Promise<boolean> {
   try {
@@ -219,10 +208,6 @@ async function fetchGitHubRepoContext(repo: GithubRepoRef, githubToken?: string)
   };
 }
 
-function extractJsonObject(text: string): string | null {
-  const match = text.match(/\{[\s\S]*\}/);
-  return match ? match[0] : null;
-}
 
 async function ensureSubmitGuardTable(envDb: D1Database): Promise<void> {
   if (submitGuardTableEnsured) return;
@@ -614,7 +599,7 @@ export async function submitProduct(formData: FormData) {
     ? data.tags.split(",").map((t) => t.trim()).filter(Boolean)
     : [];
 
-  await db.insert(products).values({
+  const inserted = await db.insert(products).values({
     name: data.name,
     slug,
     tagline: data.tagline,
@@ -631,9 +616,15 @@ export async function submitProduct(formData: FormData) {
     makerLink: data.makerLink || null,
     userId: session.user.id,
     launchDate: today,
-  });
+  }).returning({ id: products.id });
 
   await logEvent(db, "submission", "info", `Product submitted: ${data.name}`, { slug, url: data.url, makerName: data.makerName || null }, session.user.id);
+
+  // Fire-and-forget bilingual translation
+  const productId = inserted[0]?.id;
+  if (productId) {
+    translateAndUpdate(db, productId, data.tagline, data.description || "", apiKeys).catch(() => {});
+  }
 
   // Tweet about the new submission (fire-and-forget)
   const xapiKey = String((env as unknown as Record<string, unknown>).XAPI_API_KEY || "");
@@ -705,6 +696,12 @@ export async function updateProduct(slug: string, formData: FormData) {
       makerLink: data.makerLink || null,
     })
     .where(eq(products.slug, slug));
+
+  // Re-translate if tagline or description changed
+  if (data.tagline !== product.tagline || (data.description || null) !== product.description) {
+    const updateApiKeys = resolveApiKeys(env as unknown as Record<string, unknown>);
+    translateAndUpdate(db, product.id, data.tagline, data.description || "", updateApiKeys).catch(() => {});
+  }
 
   revalidatePath(`/product/${slug}`);
   revalidatePath("/");

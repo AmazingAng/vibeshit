@@ -14,6 +14,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getMessages } from "@/lib/i18n";
 import { getRequestLocale } from "@/lib/i18n-server";
+import { getLocalizedTagline, getLocalizedDescription } from "@/lib/bilingual";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -91,7 +92,7 @@ export default async function ProductPage({ params }: Props) {
 
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold">{product.name}</h1>
-          <p className="mt-1 text-muted-foreground">{product.tagline}</p>
+          <p className="mt-1 text-muted-foreground">{getLocalizedTagline(product, locale)}</p>
           <div className="mt-3 flex items-center gap-3">
             <a
               href={product.url}
@@ -188,14 +189,18 @@ export default async function ProductPage({ params }: Props) {
 
       <Separator className="my-8" />
 
-      {product.description && (
-        <>
-          <div className="prose prose-sm max-w-none text-foreground">
-            <p className="whitespace-pre-wrap">{product.description}</p>
-          </div>
-          <Separator className="my-8" />
-        </>
-      )}
+      {(() => {
+        const localizedDesc = getLocalizedDescription(product, locale);
+        if (!localizedDesc) return null;
+        return (
+          <>
+            <div className="prose prose-sm max-w-none text-foreground">
+              <p className="whitespace-pre-wrap">{localizedDesc}</p>
+            </div>
+            <Separator className="my-8" />
+          </>
+        );
+      })()}
 
       <div className="flex items-center gap-3 text-sm text-muted-foreground">
         {product.userImage && product.userUsername && (
