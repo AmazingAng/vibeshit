@@ -232,10 +232,12 @@ function parseTrendingHtml(html: string): TrendingRepo[] {
 /**
  * Fetch detailed repo context from GitHub API.
  */
+let lastFetchError = "";
 async function fetchRepoContext(
   fullName: string,
   githubToken: string
 ): Promise<RepoContext | null> {
+  lastFetchError = "";
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "vibeshit-trending-bot",
@@ -244,12 +246,39 @@ async function fetchRepoContext(
     headers.Authorization = `Bearer ${githubToken}`;
   }
 
-  const repoRes = await fetchWithTimeout(
-    `https://api.github.com/repos/${fullName}`,
-    { headers },
-    8000
-  );
-  if (!repoRes.ok) return null;
+  let repoRes: Response;
+  try {
+    repoRes = await fetchWithTimeout(
+      `https://api.github.com/repos/${fullName}`,
+      { headers },
+      8000
+    );
+  } catch (e) {
+    lastFetchError = `timeout/network: ${e instanceof Error ? e.message : String(e)}`;
+    return null;
+  }
+
+  // If token is invalid (401/403), retry without token
+  if (!repoRes.ok && githubToken && (repoRes.status === 401 || repoRes.status === 403)) {
+    const fallbackHeaders: Record<string, string> = {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "vibeshit-trending-bot",
+    };
+    try {
+      repoRes = await fetchWithTimeout(
+        `https://api.github.com/repos/${fullName}`,
+        { headers: fallbackHeaders },
+        8000
+      );
+    } catch (e) {
+      lastFetchError = `fallback timeout/network: ${e instanceof Error ? e.message : String(e)}`;
+      return null;
+    }
+  }
+  if (!repoRes.ok) {
+    lastFetchError = `HTTP ${repoRes.status}`;
+    return null;
+  }
 
   const repo = (await repoRes.json()) as {
     description?: string | null;
@@ -325,8 +354,8 @@ async function analyzeWithAi(
     '  "taglineZh": string,       // Chinese translation of the tagline',
     '  "description": string,     // 1-3 sentence English description for the community, max 500 chars',
     '  "descriptionZh": string,   // Chinese translation of the description',
-    '  "agent": string,           // max 2 AI agents/tools, comma-separated (e.g. "Cursor", "Cursor, Claude Code"). Use "Unknown" if unclear',
-    '  "llm": string,             // max 2 LLMs, comma-separated (e.g. "GPT-4", "Claude 3.5, GPT-4"). Use "Unknown" if unclear',
+    '  "agent": string,           // max 2 AI agents/tools, comma-separated (e.g. "Cursor", "Cursor, Claude Code"). Never say "Unknown" — always guess the most likely agent based on the repo\'s language, ecosystem, and context',
+    '  "llm": string,             // max 2 LLMs, comma-separated (e.g. "GPT-4", "Claude 3.5, GPT-4"). Never say "Unknown" — always guess the most likely LLM based on the repo\'s dependencies, API calls, and context',
     '  "tags": string[],          // 1-5 relevant tags',
     '  "reason": string           // brief explanation of why this is/isn\'t a vibe project',
     "}",
@@ -582,6 +611,7 @@ export async function GET(request: NextRequest) {
       repo: string;
       status: string;
       reason?: string;
+      error?: string;
     }> = [];
 
     let processed = 0; // count of newly processed (non-cached) repos
@@ -619,7 +649,7 @@ export async function GET(request: NextRequest) {
           language: repo.language,
           status: "already_exists",
           publishedProductId: existingProduct.id,
-        });
+        }).onConflictDoNothing();
         skipped++;
         results.push({ repo: repo.fullName, status: "already_exists" });
         continue;
@@ -628,15 +658,8 @@ export async function GET(request: NextRequest) {
       // Phase 2: Fetch repo context
       const context = await fetchRepoContext(repo.fullName, githubToken);
       if (!context) {
-        await db.insert(githubTrendingCache).values({
-          repoFullName: repo.fullName,
-          repoUrl: repo.url,
-          stars: repo.stars,
-          description: repo.description,
-          language: repo.language,
-          status: "fetch_failed",
-        });
-        results.push({ repo: repo.fullName, status: "fetch_failed" });
+        // Don't cache fetch failures — retry next cycle
+        results.push({ repo: repo.fullName, status: "fetch_failed", error: lastFetchError });
         continue;
       }
 
@@ -678,14 +701,7 @@ export async function GET(request: NextRequest) {
       );
 
       if (!analysis) {
-        await db.insert(githubTrendingCache).values({
-          repoFullName: repo.fullName,
-          repoUrl: repo.url,
-          stars: repo.stars,
-          description: repo.description,
-          language: repo.language,
-          status: "ai_failed",
-        });
+        // Don't cache AI failures — retry next cycle
         results.push({ repo: repo.fullName, status: "ai_failed" });
         continue;
       }
@@ -699,7 +715,7 @@ export async function GET(request: NextRequest) {
           language: repo.language,
           status: "rejected",
           aiReason: analysis.reason,
-        });
+        }).onConflictDoNothing();
         rejected++;
         results.push({
           repo: repo.fullName,
@@ -721,7 +737,7 @@ export async function GET(request: NextRequest) {
         status: productId ? "published" : "duplicate",
         publishedProductId: productId,
         aiReason: analysis.reason,
-      });
+      }).onConflictDoNothing();
 
       if (productId) {
         published++;
@@ -757,13 +773,13 @@ export async function GET(request: NextRequest) {
             const productUrl = `https://vibeshit.org/product/${product.slug}`;
             const starsStr = repo.stars >= 1000 ? `${(repo.stars / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(repo.stars);
             const metaParts: string[] = [];
-            if (analysis.agent && analysis.agent !== "Unknown") metaParts.push(`🤖 ${analysis.agent}`);
-            if (analysis.llm && analysis.llm !== "Unknown") metaParts.push(`🧠 ${analysis.llm}`);
+            if (analysis.agent) metaParts.push(`🤖 ${analysis.agent}`);
+            if (analysis.llm) metaParts.push(`🧠 ${analysis.llm}`);
             const metaLine = metaParts.length > 0 ? `${metaParts.join(" · ")}\n` : "";
             const tweetTagline = analysis.taglineZh || analysis.tagline;
             const tweetText = `🔥 on GitHub\n${analysis.name}\n${tweetTagline}\n\n⭐ ${starsStr} stars on GitHub\n${metaLine}\n${productUrl}`;
             try {
-              await fetchWithTimeout(
+              const tweetRes = await fetchWithTimeout(
                 "https://action.xapi.to/v1/actions/execute",
                 {
                   method: "POST",
@@ -778,8 +794,13 @@ export async function GET(request: NextRequest) {
                 },
                 15000
               );
-            } catch {
-              // Ignore tweet failures
+              const tweetBody = await tweetRes.text().catch(() => "");
+              const tweetOk = tweetRes.ok && !tweetBody.includes('"success":false');
+              if (!tweetOk) {
+                await logEvent(db, "tweet_failed", "warn", `Tweet failed for ${repo.fullName}: HTTP ${tweetRes.status} ${tweetBody.slice(0, 300)}`);
+              }
+            } catch (e) {
+              await logEvent(db, "tweet_failed", "warn", `Tweet error for ${repo.fullName}: ${e instanceof Error ? e.message : String(e)}`).catch(() => {});
             }
           }
         }

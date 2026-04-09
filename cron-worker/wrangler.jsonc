@@ -1,5 +1,6 @@
 {
 	"name": "vibeshit-cron",
+	"account_id": "4592ac4d37d07944e6abee1c15a6cc00",
 	"main": "worker.js",
 	"compatibility_date": "2025-12-01",
 	"triggers": {
